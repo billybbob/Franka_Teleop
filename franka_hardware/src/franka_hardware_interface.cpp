@@ -18,6 +18,7 @@
 #include <exception>
 
 #include <franka/exception.h>
+#include <franka/logging/logger.hpp>
 #include <hardware_interface/handle.hpp>
 #include <hardware_interface/hardware_info.hpp>
 #include <hardware_interface/system_interface.hpp>
@@ -27,6 +28,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include "franka_hardware/franka_hardware_interface.hpp"
+#include "franka_hardware/ros_libfranka_logger.hpp"
 
 namespace franka_hardware {
 
@@ -50,7 +52,10 @@ FrankaHardwareInterface::FrankaHardwareInterface()
            velocity_cartesian_interface_claimed_},
           {k_HW_IF_CARTESIAN_POSE_COMMAND, hw_cartesian_pose_commands_.size(),
            pose_cartesian_interface_claimed_},
-      }) {}
+      }) {
+  // Allow libfranka to use the ROS logger
+  franka::logging::addLogger(std::make_shared<RosLibfrankaLogger>(getLogger()));
+}
 
 std::vector<StateInterface> FrankaHardwareInterface::export_state_interfaces() {
   std::vector<StateInterface> state_interfaces;
