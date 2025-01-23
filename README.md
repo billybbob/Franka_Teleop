@@ -58,7 +58,7 @@ This package is in rapid development. Users should expect breaking changes and a
     ---
     Also install the **Development Tools** package:
     ```bash
-    sudo apt install ros-humble-dev-tools
+    sudo apt install ros-dev-tools
     ```
     Installing the **Desktop** or **Bare Bones** should automatically source the **ROS2** environment but, under some circumstances you may need to do this again:
     ```bash
