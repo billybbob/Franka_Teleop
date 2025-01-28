@@ -19,13 +19,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include "controller_interface/controller_interface.hpp"
+#include <controller_interface/controller_interface.hpp>
+#include <rclcpp_lifecycle/lifecycle_publisher.hpp>
+#include <rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp>
+#include <realtime_tools/realtime_publisher.hpp>
+
 #include "franka_msgs/msg/franka_robot_state.hpp"
-#include "franka_robot_state_broadcaster_parameters.hpp"
+#include "franka_robot_state_broadcaster/franka_robot_state_broadcaster_parameters.hpp"
 #include "franka_semantic_components/franka_robot_state.hpp"
-#include "rclcpp_lifecycle/lifecycle_publisher.hpp"
-#include "rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp"
-#include "realtime_tools/realtime_publisher.h"
 
 namespace franka_robot_state_broadcaster {
 class FrankaRobotStateBroadcaster : public controller_interface::ControllerInterface {
@@ -56,13 +57,34 @@ class FrankaRobotStateBroadcaster : public controller_interface::ControllerInter
       const rclcpp_lifecycle::State& previous_state) override;
 
  private:
+  // override RealtimePublisher to customize the trylock behavior
+  class FrankaRobotStateRealtimePublisher
+      : public realtime_tools::RealtimePublisher<franka_msgs::msg::FrankaRobotState> {
+    using PublisherSharedPtr = rclcpp::Publisher<franka_msgs::msg::FrankaRobotState>::SharedPtr;
+
+   public:
+    // Constructor for the nested class
+    // NOLINTBEGIN
+    explicit FrankaRobotStateRealtimePublisher(PublisherSharedPtr publisher)
+        : realtime_tools::RealtimePublisher<franka_msgs::msg::FrankaRobotState>(
+              std::move(publisher)) {}
+    // NOLINTEND
+    // we only need to hide the trylock() method
+    bool trylock();
+    [[nodiscard]] int try_count() const { return try_count_; }
+
+   private:
+    const int try_count_ = 10;
+  };
+  // shared_ptr to object of override class
+  std::shared_ptr<FrankaRobotStateBroadcaster::FrankaRobotStateRealtimePublisher>
+      realtime_franka_state_publisher;
+
   std::shared_ptr<ParamListener> param_listener;
   Params params;
 
   std::string state_interface_name{"robot_state"};
   std::shared_ptr<rclcpp::Publisher<franka_msgs::msg::FrankaRobotState>> franka_state_publisher;
-  std::shared_ptr<realtime_tools::RealtimePublisher<franka_msgs::msg::FrankaRobotState>>
-      realtime_franka_state_publisher;
   std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PoseStamped>>
       current_pose_stamped_publisher_;
   std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PoseStamped>>
@@ -91,5 +113,4 @@ class FrankaRobotStateBroadcaster : public controller_interface::ControllerInter
   franka_msgs::msg::FrankaRobotState franka_robot_state_msg_;
   std::unique_ptr<franka_semantic_components::FrankaRobotState> franka_robot_state_;
 };
-
 }  // namespace franka_robot_state_broadcaster

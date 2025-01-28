@@ -1,4 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
+
+# Suppress CMP0002 warning
+option(CHECK_TIDY "Enable clang-tidy checks" OFF)
+
 project(franka_gripper)
 
 if(NOT CMAKE_CXX_STANDARD)
