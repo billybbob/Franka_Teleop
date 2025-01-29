@@ -44,13 +44,20 @@ class MockRobot : public franka_hardware::Robot {
   MOCK_METHOD(franka::RobotState, readOnce, (), (override));
   MOCK_METHOD(MockModel*, getModel, (), (override));
   MOCK_METHOD(void, writeOnce, ((const std::array<double, 7>&)efforts), (override));
-  MOCK_METHOD(void, writeOnce, ((const std::array<double, 6>&)cartesian_velocity), (override));
+  MOCK_METHOD(void, writeOnce, ((const std::vector<double>&)efforts), (override));
+  MOCK_METHOD(void,
+              writeOnceCartesianVelocity,
+              ((const std::array<double, 6>&)cartesian_velocity),
+              (override));
   MOCK_METHOD(void,
               writeOnce,
               ((const std::array<double, 6>&)cartesian_velocity,
                (const std::array<double, 2>&)elbow_command),
               (override));
-  MOCK_METHOD(void, writeOnce, ((const std::array<double, 16>&)cartesian_pose), (override));
+  MOCK_METHOD(void,
+              writeOnceCartesianPose,
+              ((const std::array<double, 16>&)cartesian_pose),
+              (override));
   MOCK_METHOD(void,
               writeOnce,
               ((const std::array<double, 16>&)cartesian_pose,

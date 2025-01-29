@@ -100,42 +100,27 @@ class Robot {
 
   /**
    * This function will automatically propagate the received hardware active command
-   * interface
-   * @param[in] joint_hardware_command joint hardware command either efforts or velocities
+   *   interface
+   *
+   * @param[in] command the incoming user command. Can be either
+   *   - joint effort in format [1, ..., n]
+   *   - joint velocity in format [1, ..., n]
+   *   - joint position in format [1, ..., n]
+   *   - Cartesian velocity in format [vx, vy, vz, wx, wy, wz]
+   *   - Cartesian pose command in column major format [4x4] as homogeneous transformation matrix
    */
-  virtual void writeOnce(const std::array<double, 7>& joint_hardware_command);
-
-  /**
-   * Cartesian velocity command
-   * @param[in] cartesian_velocity_command cartesian level velocity command in format
-   *  [vx, vy, vz, wx, wy, wz]
-   */
-  virtual void writeOnce(const std::array<double, 6>& cartesian_velocity_command);
+  virtual void writeOnce(const std::vector<double>& command);
 
   /**
    * Cartesian velocity command with elbow command
-   * @param[in] cartesian_velocity_command cartesian level velocity command in format
-   *  [vx, vy, vz, wx, wy, wz]
+   *
+   * @param[in] cartesian_command the incoming Cartesian user command. Can be either
+   *   - Cartesian velocity command in format [vx, vy, vz, wx, wy, wz]
+   *   - Cartesian pose command in column major format [4x4] as homogeneous transformation matrix
    * @param[in] elbow_command elbow command representing joint3_position in rad and joint4 sign
    */
-  virtual void writeOnce(const std::array<double, 6>& cartesian_velocity_command,
-                         const std::array<double, 2>& elbow_command);
-
-  /**
-   * Cartesian pose command
-   * @param[in] cartesian_pose_command cartesian level pose command in column major format [4x4]
-   * homogeneous transformation matrix
-   */
-  virtual void writeOnce(const std::array<double, 16>& cartesian_pose_command);
-
-  /**
-   * Cartesian pose command with elbow command
-   * @param[in] cartesian_pose_command cartesian level pose command in column major format [4x4]
-   * homogeneous transformation matrix
-   * @param[in] elbow_command elbow command representing joint3_position in rad and joint4 sign
-   */
-  virtual void writeOnce(const std::array<double, 16>& cartesian_pose_command,
-                         const std::array<double, 2>& elbow_command);
+  virtual void writeOnce(const std::vector<double>& cartesian_command,
+                         const std::vector<double>& elbow_command);
 
   /**
    * Sets the impedance for each joint in the internal controller.
@@ -259,25 +244,43 @@ class Robot {
    * Get the current robot state, when the controller is active
    * @return current robot state.
    */
-  virtual franka::RobotState readOnceActiveControl();
+  franka::RobotState readOnceActiveControl();
 
   /**
    * The robot will use set of torques until a different set of torques are commanded.
    * @param[in] efforts torque command for each joint.
    */
-  virtual void writeOnceEfforts(const std::array<double, 7>& efforts);
+  void writeOnceJointEfforts(const std::array<double, 7>& efforts);
 
   /**
    * The robot will use set of velocities until a different set of velocities are commanded.
    * @param[in] joint_velocities joint velocity command.
    */
-  virtual void writeOnceJointVelocities(const std::array<double, 7>& joint_velocities);
+  void writeOnceJointVelocities(const std::array<double, 7>& joint_velocities);
 
   /**
    * The robot will use set of positions until a different set of position are commanded.
    * @param[in] joint_position joint position command.
    */
-  virtual void writeOnceJointPositions(const std::array<double, 7>& positions);
+  void writeOnceJointPositions(const std::array<double, 7>& positions);
+
+  /**
+   * Cartesian velocity command with optional elbow command
+   * @param[in] cartesian_velocity_command cartesian level velocity command in format
+   *  [vx, vy, vz, wx, wy, wz]
+   * @param[in] elbow_command elbow command representing joint3_position in rad and joint4 sign
+   */
+  void writeOnceCartesianVelocity(const std::array<double, 6>& cartesian_velocity_command,
+                                  const std::optional<std::array<double, 2>>& elbow_command);
+
+  /**
+   * Cartesian pose command with optional elbow command
+   * @param[in] cartesian_pose_command cartesian level pose command in column major format [4x4]
+   *   homogeneous transformation matrix
+   * @param[in] elbow_command elbow command representing joint3_position in rad and joint4 sign
+   */
+  void writeOnceCartesianPose(const std::array<double, 16>& cartesian_pose_command,
+                              const std::optional<std::array<double, 2>>& elbow_command);
 
   /**
    * @brief Preprocessing includes rate limiting and low pass filtering, if activated

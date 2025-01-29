@@ -313,7 +313,7 @@ TEST_P(FrankaHardwareInterfaceTest, when_write_called_expect_ok) {
   std::string command_interface = GetParam();
 
   auto mock_robot = std::make_shared<MockRobot>();
-  EXPECT_CALL(*mock_robot, writeOnce(std::array<double, 7>{}));
+  EXPECT_CALL(*mock_robot, writeOnce(std::vector<double>{0, 0, 0, 0, 0, 0, 0}));
 
   std::string arm_id{"fr3"};
   franka_hardware::FrankaHardwareInterface franka_hardware_interface(mock_robot, arm_id);

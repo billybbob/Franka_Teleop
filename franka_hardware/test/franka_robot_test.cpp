@@ -96,8 +96,11 @@ TEST_F(FrankaRobotTests,
 TEST_F(
     FrankaRobotTests,
     givenCartesianVelocityControlIsStarted_whenWriteOnceIsCalled_expectActiveControlWriteOnceCalled) {
-  const std::array<double, 6>& cartesian_velocities{1, 2, 3, 1, 2, 3};
-  const franka::CartesianVelocities expected_cartesian_velocities(cartesian_velocities);
+  const std::vector<double>& cartesian_velocities{1, 2, 3, 1, 2, 3};
+  std::array<double, 6> cartesian_velocities_array;
+  std::copy(cartesian_velocities.begin(), cartesian_velocities.end(),
+            cartesian_velocities_array.begin());
+  const franka::CartesianVelocities expected_cartesian_velocities(cartesian_velocities_array);
 
   auto expectCallFunction = [this]() {
     EXPECT_CALL(*mock_libfranka_robot, startCartesianVelocityControl(testing::_))
@@ -105,23 +108,24 @@ TEST_F(
   };
 
   testReadWriteOnce<void (franka_hardware::Robot::*)(), franka::CartesianVelocities,
-                    std::array<double, 6>>(
+                    std::vector<double>>(
       &franka_hardware::Robot::initializeCartesianVelocityInterface, expectCallFunction,
       cartesian_velocities, expected_cartesian_velocities);
 }
 
 TEST_F(FrankaRobotTests,
        givenCartesianPoseControlIsStart_whenWriteOnceIsCalled_expectActiveControlWriteOnceCalled) {
-  const std::array<double, 16>& cartesian_pose{2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 2, 3, 4, 1};
-  const franka::CartesianPose expected_cartesian_pose(cartesian_pose);
+  const std::vector<double> cartesian_pose{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2, 3, 4, 1};
+  std::array<double, 16> cartesian_pose_array{};
+  std::copy(cartesian_pose.begin(), cartesian_pose.end(), cartesian_pose_array.begin());
+  const franka::CartesianPose expected_cartesian_pose(cartesian_pose_array);
 
   auto expectCallFunction = [this]() {
     EXPECT_CALL(*mock_libfranka_robot, startCartesianPoseControl(testing::_))
         .WillOnce(testing::Return(testing::ByMove((std::move(mock_active_control)))));
   };
 
-  testReadWriteOnce<void (franka_hardware::Robot::*)(), franka::CartesianPose,
-                    std::array<double, 16>>(
+  testReadWriteOnce<void (franka_hardware::Robot::*)(), franka::CartesianPose, std::vector<double>>(
       &franka_hardware::Robot::initializeCartesianPoseInterface, expectCallFunction, cartesian_pose,
       expected_cartesian_pose);
 }
@@ -129,8 +133,10 @@ TEST_F(FrankaRobotTests,
 TEST_F(
     FrankaRobotTests,
     givenJointPositionControlIsControlIsStarted_whenWriteOnceIsCalled_expectActiveControlWriteOnceCalled) {
-  const std::array<double, 7>& joint_positions{1, 0, 0, 0, 0, 0, 0};
-  const franka::JointPositions expected_joint_positions(joint_positions);
+  const std::vector<double> joint_positions{1, 0, 0, 0, 0, 0, 0};
+  std::array<double, 7> joint_positions_array{};
+  std::copy(joint_positions.begin(), joint_positions.end(), joint_positions_array.begin());
+  const franka::JointPositions expected_joint_positions(joint_positions_array);
 
   auto expectCallFunction = [this]() {
     EXPECT_CALL(*mock_libfranka_robot, startJointPositionControl(testing::_))
@@ -138,16 +144,18 @@ TEST_F(
   };
 
   testReadWriteOnce<void (franka_hardware::Robot::*)(), franka::JointPositions,
-                    std::array<double, 7>>(
-      &franka_hardware::Robot::initializeJointPositionInterface, expectCallFunction,
-      joint_positions, expected_joint_positions);
+                    std::vector<double>>(&franka_hardware::Robot::initializeJointPositionInterface,
+                                         expectCallFunction, joint_positions,
+                                         expected_joint_positions);
 }
 
 TEST_F(
     FrankaRobotTests,
     givenJointVelocityControlIsStarted_whenWriteOnceIsCalled_expectActiveControlWriteOnceCalled) {
-  const std::array<double, 7>& joint_velocities{1, 0, 0, 0, 0, 0, 0};
-  const franka::JointVelocities expected_joint_velocities(joint_velocities);
+  const std::vector<double> joint_velocities{1, 0, 0, 0, 0, 0, 0};
+  std::array<double, 7> joint_velocities_array{};
+  std::copy(joint_velocities.begin(), joint_velocities.end(), joint_velocities_array.begin());
+  const franka::JointVelocities expected_joint_velocities(joint_velocities_array);
 
   const auto expectCallFunction = [this]() {
     EXPECT_CALL(*mock_libfranka_robot, startJointVelocityControl(testing::_))
@@ -155,14 +163,14 @@ TEST_F(
   };
 
   testReadWriteOnce<void (franka_hardware::Robot::*)(), franka::JointVelocities,
-                    std::array<double, 7>>(
-      &franka_hardware::Robot::initializeJointVelocityInterface, expectCallFunction,
-      joint_velocities, expected_joint_velocities);
+                    std::vector<double>>(&franka_hardware::Robot::initializeJointVelocityInterface,
+                                         expectCallFunction, joint_velocities,
+                                         expected_joint_velocities);
 }
 
 TEST_F(FrankaRobotTests,
        givenEffortControlIsStarted_whenWriteOnceIsCalled_expectActiveControlWriteOnceCalled) {
-  const std::array<double, 7>& joint_torques{1, 0, 0, 0, 0, 0, 0};
+  const std::vector<double>& joint_torques{1, 0, 0, 0, 0, 0, 0};
   // Torque rate limiter defaulted to active
   const franka::Torques expected_joint_torques{0.999999, 0, 0, 0, 0, 0, 0};
 
@@ -171,7 +179,7 @@ TEST_F(FrankaRobotTests,
         .WillOnce(testing::Return(testing::ByMove((std::move(mock_active_control)))));
   };
 
-  testReadWriteOnce<void (franka_hardware::Robot::*)(), franka::Torques, std::array<double, 7>>(
+  testReadWriteOnce<void (franka_hardware::Robot::*)(), franka::Torques, std::vector<double>>(
       &franka_hardware::Robot::initializeTorqueInterface, expectCallFunction, joint_torques,
       expected_joint_torques);
 }
@@ -201,8 +209,8 @@ TEST_F(FrankaRobotTests,
   franka_hardware::Robot robot(std::move(mock_libfranka_robot), std::move(mock_model));
 
   EXPECT_THROW(robot.writeOnce(joint_torques), std::runtime_error);
-  EXPECT_THROW(robot.writeOnce(cartesian_velocities), std::runtime_error);
+  EXPECT_THROW(robot.writeOnceCartesianVelocity(cartesian_velocities), std::runtime_error);
   EXPECT_THROW(robot.writeOnce(cartesian_velocities, elbow), std::runtime_error);
-  EXPECT_THROW(robot.writeOnce(cartesian_pose), std::runtime_error);
+  EXPECT_THROW(robot.writeOnceCartesianPose(cartesian_pose), std::runtime_error);
   EXPECT_THROW(robot.writeOnce(cartesian_pose, elbow), std::runtime_error);
 }
