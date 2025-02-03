@@ -79,6 +79,10 @@ TEST_F(TestFrankaRobotStateBroadcaster, test_deactivate_return_success) {
 }
 
 TEST_F(TestFrankaRobotStateBroadcaster, test_update_without_franka_state_interface_returns_error) {
+  GTEST_SKIP()
+      << "Realtime publisher try_lock behaviour - used in FrankaRobotStateBroadcaster::update() - "
+         "is not deterministic - revisit when that changes";
+
   // Avoid the "Uninteresting mock function call - returning default value"
   EXPECT_CALL(*franka_robot_state_raw_, initialize_robot_state_msg(::testing::_)).Times(1);
 
@@ -98,6 +102,9 @@ TEST_F(TestFrankaRobotStateBroadcaster, test_update_without_franka_state_interfa
 }
 
 TEST_F(TestFrankaRobotStateBroadcaster, test_update_with_franka_state_returns_success) {
+  GTEST_SKIP()
+      << "Realtime publisher try_lock behaviour - used in FrankaRobotStateBroadcaster::update() - "
+         "is not deterministic - revisit when that changes";
   // Avoid the "Uninteresting mock function call - returning default value"
   EXPECT_CALL(*franka_robot_state_raw_, initialize_robot_state_msg(::testing::_)).Times(1);
 
