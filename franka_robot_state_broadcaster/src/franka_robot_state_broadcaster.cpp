@@ -11,9 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-#include "franka_robot_state_broadcaster/franka_robot_state_broadcaster.hpp"
-
 #include <cstddef>
 #include <limits>
 #include <memory>
@@ -21,18 +18,36 @@
 #include <unordered_map>
 #include <vector>
 
-#include "hardware_interface/types/hardware_interface_return_values.hpp"
-#include "hardware_interface/types/hardware_interface_type_values.hpp"
-#include "rclcpp/clock.hpp"
-#include "rclcpp/qos.hpp"
-#include "rclcpp/qos_event.hpp"
-#include "rclcpp/time.hpp"
-#include "rclcpp_lifecycle/lifecycle_node.hpp"
-#include "rcpputils/split.hpp"
-#include "rcutils/logging_macros.h"
-#include "std_msgs/msg/header.hpp"
+#include <rcutils/logging_macros.h>
+#include <hardware_interface/types/hardware_interface_return_values.hpp>
+#include <hardware_interface/types/hardware_interface_type_values.hpp>
+#include <rclcpp/clock.hpp>
+#include <rclcpp/qos.hpp>
+#include <rclcpp/qos_event.hpp>
+#include <rclcpp/time.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
+#include <rcpputils/split.hpp>
+#include <std_msgs/msg/header.hpp>
+
+#include <franka_robot_state_broadcaster/franka_robot_state_broadcaster.hpp>
 
 namespace franka_robot_state_broadcaster {
+
+// Override trylock to customize the locking mechanism
+// You are excused for wondering why this is necessary.
+// RealtimePublisher::lock() isn't suitable for a 1kHz messaging system - it sleeps for 200
+// microseconds. RealtimePublisher::trylock() failure is highly likely due to the RCU >1kHz
+// publish rate. Here we basically force the scheduler to yield our thread, simultaneously
+// telling it reschedule us ASAP - hence not sleep_for(0) which doesn't necessarily yield.
+// After 10 attempts, we give up. Hopefully, the next call to update() will be successful.
+bool FrankaRobotStateBroadcaster::FrankaRobotStateRealtimePublisher::trylock() {
+  int count{0};
+  while (++count <= try_count_ &&
+         !realtime_tools::RealtimePublisher<franka_msgs::msg::FrankaRobotState>::trylock()) {
+    std::this_thread::sleep_for(std::chrono::microseconds(1));
+  }
+  return count <= try_count_;
+}
 
 controller_interface::CallbackReturn FrankaRobotStateBroadcaster::on_init() {
   try {
@@ -97,7 +112,7 @@ controller_interface::CallbackReturn FrankaRobotStateBroadcaster::on_configure(
     franka_state_publisher = get_node()->create_publisher<franka_msgs::msg::FrankaRobotState>(
         "~/" + state_interface_name, rclcpp::SystemDefaultsQoS());
     realtime_franka_state_publisher =
-        std::make_shared<realtime_tools::RealtimePublisher<franka_msgs::msg::FrankaRobotState>>(
+        std::make_shared<FrankaRobotStateBroadcaster::FrankaRobotStateRealtimePublisher>(
             franka_state_publisher);
     franka_robot_state_->initialize_robot_state_msg(realtime_franka_state_publisher->msg_);
   } catch (const std::exception& e) {
@@ -125,41 +140,43 @@ controller_interface::CallbackReturn FrankaRobotStateBroadcaster::on_deactivate(
 controller_interface::return_type FrankaRobotStateBroadcaster::update(
     const rclcpp::Time& time,
     const rclcpp::Duration& /*period*/) {
-  if (realtime_franka_state_publisher && realtime_franka_state_publisher->trylock()) {
-    realtime_franka_state_publisher->msg_.header.stamp = time;
-
-    if (!franka_robot_state_->get_values_as_message(realtime_franka_state_publisher->msg_)) {
-      RCLCPP_ERROR(get_node()->get_logger(),
-                   "Failed to get franka state via franka state interface.");
-      realtime_franka_state_publisher->unlock();
-      return controller_interface::return_type::ERROR;
-    }
-
-    realtime_franka_state_publisher->unlockAndPublish();
-
-    const auto& franka_state_msg = realtime_franka_state_publisher->msg_;
-
-    current_pose_stamped_publisher_->publish(franka_state_msg.o_t_ee);
-
-    last_desired_pose_stamped_publisher_->publish(franka_state_msg.o_t_ee_d);
-
-    desired_end_effector_twist_stamped_publisher_->publish(franka_state_msg.o_dp_ee_d);
-
-    external_wrench_in_base_frame_publisher_->publish(franka_state_msg.o_f_ext_hat_k);
-
-    external_wrench_in_stiffness_frame_publisher_->publish(franka_state_msg.k_f_ext_hat_k);
-
-    measured_joint_states_publisher_->publish(franka_state_msg.measured_joint_state);
-
-    external_joint_torques_publisher_->publish(franka_state_msg.tau_ext_hat_filtered);
-
-    desired_joint_states_publisher_->publish(franka_state_msg.desired_joint_state);
-
-    return controller_interface::return_type::OK;
-
-  } else {
+  if (!realtime_franka_state_publisher->trylock()) {
+    RCLCPP_ERROR(get_node()->get_logger(),
+                 "Failed to lock the realtime publisher after %d attempts",
+                 realtime_franka_state_publisher->try_count());
     return controller_interface::return_type::ERROR;
   }
+
+  realtime_franka_state_publisher->msg_.header.stamp = time;
+
+  if (!franka_robot_state_->get_values_as_message(realtime_franka_state_publisher->msg_)) {
+    RCLCPP_ERROR(get_node()->get_logger(),
+                 "Failed to get franka state via franka state interface.");
+    realtime_franka_state_publisher->unlock();
+    return controller_interface::return_type::ERROR;
+  }
+
+  realtime_franka_state_publisher->unlockAndPublish();
+
+  const auto& franka_state_msg = realtime_franka_state_publisher->msg_;
+
+  current_pose_stamped_publisher_->publish(franka_state_msg.o_t_ee);
+
+  last_desired_pose_stamped_publisher_->publish(franka_state_msg.o_t_ee_d);
+
+  desired_end_effector_twist_stamped_publisher_->publish(franka_state_msg.o_dp_ee_d);
+
+  external_wrench_in_base_frame_publisher_->publish(franka_state_msg.o_f_ext_hat_k);
+
+  external_wrench_in_stiffness_frame_publisher_->publish(franka_state_msg.k_f_ext_hat_k);
+
+  measured_joint_states_publisher_->publish(franka_state_msg.measured_joint_state);
+
+  external_joint_torques_publisher_->publish(franka_state_msg.tau_ext_hat_filtered);
+
+  desired_joint_states_publisher_->publish(franka_state_msg.desired_joint_state);
+
+  return controller_interface::return_type::OK;
 }
 
 }  // namespace franka_robot_state_broadcaster

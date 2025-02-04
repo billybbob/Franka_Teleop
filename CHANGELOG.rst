@@ -1,6 +1,13 @@
 Changelog for package franka_ros2
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Pending Release:
+----------------
+# Fix: Franka robot state broadcaster frequently fails to update GitHub Issue #94
+# Test: Re-enable a test and provide Mock functions
+# Style: Adjust clang-tidy config due to changes in generate_parameter_library()
+# Chore: Eliminate annoying CMake configure time messages
+
 v1.0.0 (2025-01-22)
 -------------------
 
