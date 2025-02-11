@@ -1,0 +1,9 @@
+repositories:
+  libfranka:
+    type: git
+    url: https://github.com/frankaemika/libfranka.git
+    version: main
+  franka_description:
+    type: git
+    url: https://github.com/frankaemika/franka_description.git
+    version: main

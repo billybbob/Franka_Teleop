@@ -12,6 +12,8 @@ pipeline {
                     notifyBitbucket()
                 }
                 sh 'rm -rf build log install'
+                sh 'tree -L 2'
+                sh 'vcs import < franka.repos --recursive'
             }
         }
         stage('Build') {

@@ -9,3 +9,4 @@ build/
 install/
 log/
 libfranka
+franka_description

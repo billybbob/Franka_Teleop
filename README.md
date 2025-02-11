@@ -7,7 +7,6 @@
 #### Table of Contents
 - [About](#about)
 - [Caution](#caution)
-- [Optional .bashrc Settings](#optional-bashrc-settings)
 - [Setup](#setup)
   - [Local Machine Installation](#local-machine-installation)
   - [Docker Container Installation](#docker-container-installation)
@@ -26,12 +25,38 @@ For convenience, we provide Dockerfile and docker-compose.yml files. While it is
 # Caution
 This package is in rapid development. Users should expect breaking changes and are encouraged to report any bugs via [GitHub Issues page](https://github.com/frankaemika/franka_ros2/issues).
 
+# Franka ROS 2 Dependencies Setup
 
+This repository contains a `.repos` file that helps you clone the required dependencies for Franka ROS 2.
 
-# Setup
+## Prerequisites
 
+### Install vcstool (vcs)
 
+There are several ways to install vcstool:
 
+1. Using apt (recommended):
+```bash
+sudo apt update
+sudo apt install python3-vcstool
+```
+
+2. Using pip3:
+First, install pip3 if you don't have it:
+```bash
+sudo apt update
+sudo apt install python3-pip
+```
+Then install vcstool:
+```bash
+pip3 install vcstool
+```
+
+3. Alternative method using apt:
+```bash
+sudo apt update
+sudo apt install python3-vcstool python3-pip
+```
 
 
 ## Local Machine Installation
@@ -62,7 +87,7 @@ This package is in rapid development. Users should expect breaking changes and a
     ```
     Installing the **Desktop** or **Bare Bones** should automatically source the **ROS2** environment but, under some circumstances you may need to do this again:
     ```bash
-    source /opt/ros/humble/setup.bash
+    source /opt/ros/humble/setup.sh
     ```
 
 2. **Create a ROS 2 Workspace:**
@@ -73,17 +98,21 @@ This package is in rapid development. Users should expect breaking changes and a
 3. **Clone the Repositories:**
    ```bash
     git clone https://github.com/frankaemika/franka_ros2.git src
-    ``` 
-4. **Detect and install project dependencies**
+    ```
+4. **Install the dependencies**
+    ```bash
+    vcs import src < franka.repos --recursive
+    ```
+5. **Detect and install project dependencies**
    ```bash
    rosdep install --from-paths src --ignore-src --rosdistro humble -y
    ```
-5. **Build**
+6. **Build**
    ```bash
    # use the --symlinks option to reduce disk usage, and facilitate development.
    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
    ```
-6. **Adjust Enviroment**
+7. **Adjust Enviroment**
    ```bash
    # Adjust environment to recognize packages and dependencies in your newly built ROS 2 workspace.
    source install/setup.sh
@@ -98,6 +127,7 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
     ```bash
     git clone https://github.com/frankaemika/franka_ros2.git
     cd franka_ros2
+    vcs import < franka.repos --recursive
     ```
     We provide separate instructions for using Docker with Visual Studio Code or the command line. Choose one of the following options:
 
@@ -164,7 +194,6 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
    ```
 > Remember, franka_ros2 is under development.  
 > Warnings can be expected.  
-> Errors? Well, they’re just undocumented features !".
 
 # Run a sample ROS2 application
 
