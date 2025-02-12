@@ -127,7 +127,7 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
     ```bash
     git clone https://github.com/frankaemika/franka_ros2.git
     cd franka_ros2
-    vcs import < franka.repos --recursive
+    vcs import < franka.repos --recursive ## Cloning the dependencies(libfranka and franka_description)
     ```
     We provide separate instructions for using Docker with Visual Studio Code or the command line. Choose one of the following options:
 
