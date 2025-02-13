@@ -154,7 +154,11 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
       ```bash
       docker exec -it franka_ros2 /bin/bash
       ```
-  6. **Build the workspace:**
+  6. **Clone the latests dependencies:**
+      ```bash
+        "vcs import src < franka.repos --recursive"
+      ```
+  7. **Build the workspace:**
       ```bash
       colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
       ```
@@ -177,11 +181,16 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
 
       The container will be built automatically, as required.
 
-  4. **Open a terminal and build the workspace:**
+  4. **Clone the latests dependencies:**
+      ```bash
+      vcs import src < franka.repos --recursive
+      ```
+
+  5. **Open a terminal and build the workspace:**
       ```bash
       colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
       ```
-  5. **Source the built workspace environment:**
+  6. **Source the built workspace environment:**
       ```bash
       source install/setup.bash
       ```
