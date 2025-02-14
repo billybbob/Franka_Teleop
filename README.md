@@ -31,34 +31,6 @@ This repository contains a `.repos` file that helps you clone the required depen
 
 ## Prerequisites
 
-### Install vcstool (vcs)
-
-There are several ways to install vcstool:
-
-1. Using apt (recommended):
-```bash
-sudo apt update
-sudo apt install python3-vcstool
-```
-
-2. Using pip3:
-First, install pip3 if you don't have it:
-```bash
-sudo apt update
-sudo apt install python3-pip
-```
-Then install vcstool:
-```bash
-pip3 install vcstool
-```
-
-3. Alternative method using apt:
-```bash
-sudo apt update
-sudo apt install python3-vcstool python3-pip
-```
-
-
 ## Local Machine Installation
 1. **Install ROS2 Development environment**
 
@@ -101,7 +73,7 @@ sudo apt install python3-vcstool python3-pip
     ```
 4. **Install the dependencies**
     ```bash
-    vcs import src < franka.repos --recursive
+    vcs import < franka.repos --recursive --skip-existing
     ```
 5. **Detect and install project dependencies**
    ```bash
@@ -156,7 +128,7 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
       ```
   6. **Clone the latests dependencies:**
       ```bash
-        "vcs import src < franka.repos --recursive"
+      vcs import < franka.repos --recursive --skip-existing
       ```
   7. **Build the workspace:**
       ```bash
@@ -183,7 +155,7 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
 
   4. **Clone the latests dependencies:**
       ```bash
-      vcs import src < franka.repos --recursive
+      vcs import < franka.repos --recursive --skip-existing
       ```
 
   5. **Open a terminal and build the workspace:**

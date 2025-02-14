@@ -12,10 +12,8 @@ ARG USER_GID=1001
 ARG USERNAME=user
 
 # Install essential packages and ROS development tools
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt-get update && \
+RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        tree \
         bash-completion \
         curl \
         gdb \
@@ -29,15 +27,12 @@ RUN --mount=type=cache,target=/var/cache/apt \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /ros2_ws
-
 # Setup user configuration
 RUN groupadd --gid $USER_GID $USERNAME \
     && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
     && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
     && echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> /home/$USERNAME/.bashrc \
-    && echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> /home/$USERNAME/.bashrc \
-    && chown $USERNAME:$USERNAME /ros2_ws
+    && echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> /home/$USERNAME/.bashrc
     
 USER $USERNAME
 
@@ -74,9 +69,12 @@ RUN sudo apt-get update \
     && sudo apt-get clean \
     && sudo rm -rf /var/lib/apt/lists/*
 
+WORKDIR /ros2_ws
+
 # Install the missing ROS 2 dependencies
 COPY . /ros2_ws/src
 RUN sudo chown -R $USERNAME:$USERNAME /ros2_ws \
+    && vcs import src < src/franka.repos --recursive --skip-existing \
     && sudo apt-get update \
     && rosdep update \
     && rosdep install --from-paths src --ignore-src --rosdistro $ROS_DISTRO -y \
@@ -86,7 +84,11 @@ RUN sudo chown -R $USERNAME:$USERNAME /ros2_ws \
     && rm -rf src \
     && mkdir -p src
 
+COPY ./franka_entrypoint.sh /franka_entrypoint.sh
+RUN sudo chmod +x /franka_entrypoint.sh
+
 # Set the default shell to bash and the workdir to the source directory
 SHELL [ "/bin/bash", "-c" ]
-ENTRYPOINT []
+ENTRYPOINT [ "/franka_entrypoint.sh" ]
+CMD [ "/bin/bash" ]
 WORKDIR /ros2_ws
