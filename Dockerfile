@@ -15,6 +15,7 @@ ARG USERNAME=user
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
     apt-get install -y --no-install-recommends \
+        tree \
         bash-completion \
         curl \
         gdb \
@@ -43,8 +44,6 @@ USER $USERNAME
 # Install some ROS 2 dependencies to create a cache layer
 RUN sudo apt-get update \
     && sudo apt-get install -y --no-install-recommends \
-        ros-humble-franka-description \
-        ros-humble-libfranka \
         ros-humble-ros-gz \
         ros-humble-sdformat-urdf \
         ros-humble-joint-state-publisher-gui \
