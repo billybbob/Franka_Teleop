@@ -73,7 +73,7 @@ This repository contains a `.repos` file that helps you clone the required depen
     ```
 4. **Install the dependencies**
     ```bash
-    vcs import < franka.repos --recursive --skip-existing
+    vcs import src < src/franka.repos --recursive --skip-existing
     ```
 5. **Detect and install project dependencies**
    ```bash
@@ -128,7 +128,7 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
       ```
   6. **Clone the latests dependencies:**
       ```bash
-      vcs import < franka.repos --recursive --skip-existing
+      vcs import src < src/franka.repos --recursive --skip-existing
       ```
   7. **Build the workspace:**
       ```bash
@@ -155,7 +155,7 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
 
   4. **Clone the latests dependencies:**
       ```bash
-      vcs import < franka.repos --recursive --skip-existing
+      vcs import src < src/franka.repos --recursive --skip-existing
       ```
 
   5. **Open a terminal and build the workspace:**
