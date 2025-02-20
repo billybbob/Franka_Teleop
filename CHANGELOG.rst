@@ -8,6 +8,7 @@ Pending Release:
 * Test: Re-enable a test and provide Mock functions
 * Style: Adjust clang-tidy config due to changes in generate_parameter_library()
 * Chore: Eliminate annoying CMake configure time messages
+* Feat: Added prefix to single robot control
 
 
 v1.0.0 (2025-01-22)
@@ -24,7 +25,7 @@ Requires libfranka >= 0.15.0 and franka_description >= 0.3.0 requires ROS 2 Humb
         -  initial_cartesian_pose, initial_elbow_state
         +  cartesian_pose_state,   elbow_state.
         - getInitialElbowConfiguration, getInitialOrientationAndTranslation, getInitialPoseMatrix
-        + getCurrentElbowConfiguration, getCurrentOrientationAndTranslation, getCurrentPoseMatrix 
+        + getCurrentElbowConfiguration, getCurrentOrientationAndTranslation, getCurrentPoseMatrix
 
 
 0.1.15 (2024-06-21)
