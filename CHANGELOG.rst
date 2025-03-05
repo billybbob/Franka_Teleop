@@ -4,11 +4,12 @@ Changelog for package franka_ros2
 Pending Release:
 ----------------
 * Add: vcstool import for compatible libfranka and franka_description
-* Fix: Franka robot state broadcaster frequently fails to update GitHub Issue #94
+* Fix: Franka robot state broadcaster GitHub Issue #94 and #105
 * Test: Re-enable a test and provide Mock functions
 * Style: Adjust clang-tidy config due to changes in generate_parameter_library()
 * Chore: Eliminate annoying CMake configure time messages
 * Feat: Added prefix to single robot control
+
 
 
 v1.0.0 (2025-01-22)
