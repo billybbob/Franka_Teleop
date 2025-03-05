@@ -14,6 +14,7 @@
 
 #include <gmock/gmock.h>
 #include <exception>
+#include <fstream>
 #include <rclcpp/rclcpp.hpp>
 
 #include <franka_hardware/franka_hardware_interface.hpp>
@@ -43,25 +44,10 @@ class MockRobot : public franka_hardware::Robot {
   MOCK_METHOD(void, stopRobot, (), (override));
   MOCK_METHOD(franka::RobotState, readOnce, (), (override));
   MOCK_METHOD(MockModel*, getModel, (), (override));
-  MOCK_METHOD(void, writeOnce, ((const std::array<double, 7>&)efforts), (override));
-  MOCK_METHOD(void, writeOnce, ((const std::vector<double>&)efforts), (override));
-  MOCK_METHOD(void,
-              writeOnceCartesianVelocity,
-              ((const std::array<double, 6>&)cartesian_velocity),
-              (override));
+  MOCK_METHOD(void, writeOnce, ((const std::vector<double>&)), (override));
   MOCK_METHOD(void,
               writeOnce,
-              ((const std::array<double, 6>&)cartesian_velocity,
-               (const std::array<double, 2>&)elbow_command),
-              (override));
-  MOCK_METHOD(void,
-              writeOnceCartesianPose,
-              ((const std::array<double, 16>&)cartesian_pose),
-              (override));
-  MOCK_METHOD(void,
-              writeOnce,
-              ((const std::array<double, 16>&)cartesian_pose,
-               (const std::array<double, 2>&)elbow_command),
+              ((const std::vector<double>&), (const std::vector<double>&)),
               (override));
   MOCK_METHOD(void,
               setJointStiffness,
@@ -91,40 +77,36 @@ class MockRobot : public franka_hardware::Robot {
   MOCK_METHOD(void, automaticErrorRecovery, (), (override));
 };
 
-inline auto createHardwareInfo() -> hardware_interface::HardwareInfo {
-  hardware_interface::HardwareInfo info;
-  std::unordered_map<std::string, std::string> hw_params;
-  hw_params["robot_ip"] = "dummy_ip";
+/**
+ * Gets the path to a directory the given file is in
+ * @param path A file path
+ * @return std::string The string ending at the last '/'
+ */
+inline auto getDirectoryName(const std::string& path) -> std::string {
+  const size_t last_slash_idx = path.rfind('/');
+  if (std::string::npos != last_slash_idx) {
+    return path.substr(0, last_slash_idx + 1);
+  }
+  return "";
+}
 
-  info.hardware_parameters = hw_params;
-  hardware_interface::InterfaceInfo command_effort_interface, command_velocity_interface,
-      command_position_interface, effort_state_interface, position_state_interface,
-      velocity_state_interface;
-
-  effort_state_interface.name = hardware_interface::HW_IF_EFFORT;
-  position_state_interface.name = hardware_interface::HW_IF_POSITION;
-  velocity_state_interface.name = hardware_interface::HW_IF_VELOCITY;
-
-  std::vector<hardware_interface::InterfaceInfo> state_interfaces = {
-      position_state_interface, velocity_state_interface, effort_state_interface};
-
-  command_effort_interface.name = k_effort_controller;
-  command_velocity_interface.name = k_velocity_controller;
-  command_position_interface.name = k_position_controller;
-
-  for (auto i = 0U; i < k_number_of_joints; i++) {
-    hardware_interface::ComponentInfo joint;
-
-    joint.name = k_joint_name + std::to_string(i + 1);
-
-    joint.command_interfaces.push_back(command_effort_interface);
-    joint.command_interfaces.push_back(command_velocity_interface);
-    joint.command_interfaces.push_back(command_position_interface);
-
-    joint.state_interfaces = state_interfaces;
-
-    info.joints.push_back(joint);
+/**
+ * Reads a file into a string
+ * @param filename The name of the file to read
+ * @return std::string The contents of the file
+ */
+inline auto readFileToString(const std::string& filename) -> std::string {
+  auto file = std::ifstream(filename);
+  if (!file.is_open()) {
+    std::cerr << "Error opening file: " << filename << std::endl;
+    return "";
   }
 
-  return info;
+  auto oss = std::ostringstream();
+  oss << file.rdbuf();
+  file.close();
+
+  return oss.str();
 }
+
+#define TEST_CASE_DIRECTORY getDirectoryName(__FILE__)

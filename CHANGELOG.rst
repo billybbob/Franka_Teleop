@@ -3,6 +3,9 @@ Changelog for package franka_ros2
 
 Pending Release:
 ----------------
+
+Requires libfranka >= 0.15.0 and franka_description >= 0.5.0 requires ROS 2 Humble
+
 * Add: vcstool import for compatible libfranka and franka_description
 * Fix: Franka robot state broadcaster GitHub Issue #94 and #105
 * Test: Re-enable a test and provide Mock functions
@@ -10,6 +13,7 @@ Pending Release:
 * Chore: Eliminate annoying CMake configure time messages
 * Feat: Added prefix to single robot control
 
+* Breaking feat: Automatically spawn command interfaces depending on the configured ones coming from the URDF
 
 
 v1.0.0 (2025-01-22)

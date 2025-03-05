@@ -186,16 +186,21 @@ TEST_F(FrankaRobotTests,
 
 TEST_F(FrankaRobotTests,
        givenControlIsNotStarted_whenWriteOnceIsCalled_expectRuntimeExceptionToBeThrown) {
-  const std::array<double, 7>& joint_torques{1, 0, 0, 0, 0, 0, 0};
+  const std::array<double, 7> joint_torques{1, 0, 0, 0, 0, 0, 0};
+  const std::vector<double> joint_torques_vector{joint_torques.cbegin(), joint_torques.cend()};
   const franka::Torques joint_torques_franka(joint_torques);
 
-  const std::array<double, 6>& cartesian_velocities{1, 0, 0, 0, 0, 0};
+  const std::array<double, 6> cartesian_velocities{1, 0, 0, 0, 0, 0};
+  const std::vector<double> cartesian_velocities_vector{cartesian_velocities.cbegin(),
+                                                        cartesian_velocities.cend()};
   const franka::CartesianVelocities cartesian_franka_velocities(cartesian_velocities);
 
-  const std::array<double, 16>& cartesian_pose{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+  const std::array<double, 16> cartesian_pose{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+  const std::vector<double> cartesian_pose_vector{cartesian_pose.cbegin(), cartesian_pose.cend()};
   const franka::CartesianPose expected_cartesian_pose(cartesian_pose);
 
-  const std::array<double, 2>& elbow{0.0, 0.0};
+  const std::array<double, 2> elbow{0.0, 0.0};
+  const std::vector<double> elbow_vector{elbow.cbegin(), elbow.cend()};
   const franka::CartesianPose expected_cartesian_pose_with_elbow(cartesian_pose, elbow);
   const franka::CartesianVelocities expected_cartesian_velocities_with_elbow(cartesian_velocities,
                                                                              elbow);
@@ -208,9 +213,9 @@ TEST_F(FrankaRobotTests,
 
   franka_hardware::Robot robot(std::move(mock_libfranka_robot), std::move(mock_model));
 
-  EXPECT_THROW(robot.writeOnce(joint_torques), std::runtime_error);
-  EXPECT_THROW(robot.writeOnceCartesianVelocity(cartesian_velocities), std::runtime_error);
-  EXPECT_THROW(robot.writeOnce(cartesian_velocities, elbow), std::runtime_error);
-  EXPECT_THROW(robot.writeOnceCartesianPose(cartesian_pose), std::runtime_error);
-  EXPECT_THROW(robot.writeOnce(cartesian_pose, elbow), std::runtime_error);
+  EXPECT_THROW(robot.writeOnce(joint_torques_vector), std::runtime_error);
+  EXPECT_THROW(robot.writeOnce(cartesian_velocities_vector), std::runtime_error);
+  EXPECT_THROW(robot.writeOnce(cartesian_velocities_vector, elbow_vector), std::runtime_error);
+  EXPECT_THROW(robot.writeOnce(cartesian_pose_vector), std::runtime_error);
+  EXPECT_THROW(robot.writeOnce(cartesian_pose_vector, elbow_vector), std::runtime_error);
 }
