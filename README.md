@@ -32,32 +32,32 @@ This repository contains a `.repos` file that helps you clone the required depen
 ## Prerequisites
 
 ## Local Machine Installation
-1. **Install ROS2 Development environment**
+1. **Install ROS 2 Development environment**
 
-    _**franka_ros2**_ is built upon _**ROS 2 Humble**_.  
+    _**franka_ros2**_ is built upon _**ROS 2 Humble**_.
 
-    To set up your ROS 2 environment, follow the official _**humble**_ installation instructions provided [**here**](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html). 
+    To set up your ROS 2 environment, follow the official _**humble**_ installation instructions provided [**here**](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html).
     The guide discusses two main installation options: **Desktop** and **Bare Bones**.
 
     #### Choose **one** of the following:
-    - **ROS 2 "Desktop Install"** (`ros-humble-desktop`)  
-      Includes a full ROS 2 installation with GUI tools and visualization packages (e.g., Rviz and Gazebo).  
+    - **ROS 2 "Desktop Install"** (`ros-humble-desktop`)
+      Includes a full ROS 2 installation with GUI tools and visualization packages (e.g., Rviz and Gazebo).
       **Recommended** for users who need simulation or visualization capabilities.
 
-    - **"ROS-Base Install (Bare Bones)"** (`ros-humble-ros-base`)  
-      A minimal installation that includes only the core ROS 2 libraries.  
+    - **"ROS-Base Install (Bare Bones)"** (`ros-humble-ros-base`)
+      A minimal installation that includes only the core ROS 2 libraries.
       Suitable for resource-constrained environments or headless systems.
 
     ```bash
     # replace <YOUR CHOICE> with either ros-humble-desktop or ros-humble-ros-base
-    sudo apt install <YOUR CHOICE>  
+    sudo apt install <YOUR CHOICE>
     ```
     ---
     Also install the **Development Tools** package:
     ```bash
     sudo apt install ros-dev-tools
     ```
-    Installing the **Desktop** or **Bare Bones** should automatically source the **ROS2** environment but, under some circumstances you may need to do this again:
+    Installing the **Desktop** or **Bare Bones** should automatically source the **ROS 2** environment but, under some circumstances you may need to do this again:
     ```bash
     source /opt/ros/humble/setup.sh
     ```
@@ -146,7 +146,7 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
 #### Option B: using Dev Containers in Visual Studio Code
 
   2. **Open Visual Studio Code ...**
-  
+
         Then, open folder  `franka_ros2`
 
   3. **Choose `Reopen in container` when prompted.**
@@ -172,16 +172,20 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
    ```bash
    colcon test
    ```
-> Remember, franka_ros2 is under development.  
-> Warnings can be expected.  
+> Remember, franka_ros2 is under development.
+> Warnings can be expected.
 
-# Run a sample ROS2 application
+# Run a sample ROS 2 application
 
 To verify that your setup works correctly without a robot, you can run the following command to use dummy hardware:
 
 ```bash
 ros2 launch franka_fr3_moveit_config moveit.launch.py robot_ip:=dont-care use_fake_hardware:=true
 ```
+
+# Run Gazebo examples with ROS 2
+
+If you want to use Gazebo to run your code, you can find some examples here: [franka_gazebo](./franka_gazebo/README.md)
 
 
 # Troubleshooting
@@ -199,11 +203,10 @@ Contributions are welcome! Please see [CONTRIBUTING.md](https://github.com/frank
 
 All packages of franka_ros2 are licensed under the Apache 2.0 license.
 
-## Contact 
+## Contact
 
 For questions or support, please open an issue on the [GitHub Issues](https://github.com/frankaemika/franka_ros2/issues) page.
 
 See the [Franka Control Interface (FCI) documentation](https://frankaemika.github.io/docs) for more information.
-
 
 [def]: #docker-container-installation
