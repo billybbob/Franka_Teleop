@@ -1,6 +1,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <hardware_interface/component_parser.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include "test_utils.hpp"
@@ -10,21 +11,39 @@ using namespace std::chrono_literals;
 class FrankaActionServerTests
     : public ::testing::TestWithParam<
           std::pair<std::function<void(std::shared_ptr<MockRobot> mock_robot)>,
-                    rclcpp_action::ResultCode>> {};
+                    rclcpp_action::ResultCode>> {
+ public:
+  auto SetUp() -> void override {
+    auto urdf_string = readFileToString(TEST_CASE_DIRECTORY + arm_id + ".urdf");
+    auto parsed_hardware_infos = hardware_interface::parse_control_resources_from_urdf(urdf_string);
+    auto number_of_expected_hardware_components = 1;
+
+    ASSERT_EQ(parsed_hardware_infos.size(), number_of_expected_hardware_components);
+
+    default_hardware_info = parsed_hardware_infos[0];
+    default_franka_hardware_interface.on_init(default_hardware_info);
+  }
+
+ protected:
+  std::string arm_id{"fr3"};
+  std::shared_ptr<MockRobot> default_mock_robot = std::make_shared<MockRobot>();
+  hardware_interface::HardwareInfo default_hardware_info;
+  franka_hardware::FrankaHardwareInterface default_franka_hardware_interface{default_mock_robot,
+                                                                             arm_id};
+  /* Helper function to get the response of a action service */
+  template <typename action_client_type>
+  void get_action_service_response(
+      std::function<void(std::shared_ptr<MockRobot> mock_robot)> mock_function,
+      const std::string& action_name,
+      rclcpp_action::ResultCode result_code);
+};
 
 template <typename action_client_type>
-void get_action_service_response(
+void FrankaActionServerTests::get_action_service_response(
     std::function<void(std::shared_ptr<MockRobot> mock_robot)> mock_function,
     const std::string& action_name,
     rclcpp_action::ResultCode result_code) {
-  auto mock_robot = std::make_shared<MockRobot>();
-  mock_function(mock_robot);
-
-  std::string arm_id{"fr3"};
-  franka_hardware::FrankaHardwareInterface franka_hardware_interface(mock_robot, arm_id);
-
-  const auto hardware_info = createHardwareInfo();
-  franka_hardware_interface.on_init(hardware_info);
+  mock_function(default_mock_robot);
 
   auto node = rclcpp::Node::make_shared("test_node");
 

@@ -24,6 +24,11 @@
 
 namespace franka_hardware {
 
+constexpr unsigned int kMaxNumberOfJoints = 7;
+constexpr unsigned int kMaxNumberOfCartesianVelocities = 6;
+constexpr unsigned int kMaxNumberOfElbowCommands = 2;
+constexpr unsigned int kMaxNumberOfCartesianPoseCommands = 16;
+
 Robot::Robot(std::unique_ptr<franka::Robot> robot, std::unique_ptr<Model> model)
     : robot_(std::move(robot)), franka_hardware_model_(std::move(model)) {}
 
@@ -68,20 +73,89 @@ void Robot::stopRobot() {
   }
 }
 
-void Robot::writeOnce(const std::array<double, 7>& joint_commands) {
+void Robot::writeOnce(const std::vector<double>& command) {
   if (!active_control_) {
     throw std::runtime_error("Control hasn't been started");
   }
-  if (effort_interface_active_) {
-    writeOnceEfforts(joint_commands);
-  } else if (joint_velocity_interface_active_) {
-    writeOnceJointVelocities(joint_commands);
-  } else if (joint_position_interface_active_) {
-    writeOnceJointPositions(joint_commands);
+
+  if ((joint_position_interface_active_ || joint_velocity_interface_active_ ||
+       effort_interface_active_) &&
+      command.size() <= kMaxNumberOfJoints) {
+    auto joint_command_array = std::array<double, kMaxNumberOfJoints>();
+    std::copy(command.begin(), command.end(), joint_command_array.begin());
+
+    if (effort_interface_active_) {
+      writeOnceJointEfforts(joint_command_array);
+    } else if (joint_velocity_interface_active_) {
+      writeOnceJointVelocities(joint_command_array);
+    } else if (joint_position_interface_active_) {
+      writeOnceJointPositions(joint_command_array);
+    }
+
+    return;
   }
+
+  if (cartesian_velocity_interface_active_ && command.size() <= kMaxNumberOfCartesianVelocities) {
+    auto cartesian_velocity_command = std::array<double, kMaxNumberOfCartesianVelocities>();
+    std::copy(command.begin(), command.end(), cartesian_velocity_command.begin());
+
+    writeOnceCartesianVelocity(cartesian_velocity_command, std::nullopt);
+
+    return;
+  }
+
+  if (cartesian_pose_interface_active_ && command.size() <= kMaxNumberOfCartesianPoseCommands) {
+    auto cartesian_pose_command = std::array<double, kMaxNumberOfCartesianPoseCommands>();
+    std::copy(command.begin(), command.end(), cartesian_pose_command.begin());
+
+    writeOnceCartesianPose(cartesian_pose_command, std::nullopt);
+
+    return;
+  }
+
+  // This part should not be reached
+  throw std::invalid_argument("Command has unknown size " + std::to_string(command.size()));
 }
 
-void Robot::writeOnceEfforts(const std::array<double, 7>& efforts) {
+void Robot::writeOnce(const std::vector<double>& cartesian_command,
+                      const std::vector<double>& elbow_command) {
+  if (!active_control_) {
+    throw std::runtime_error("Control hasn't been started");
+  }
+
+  if (cartesian_velocity_interface_active_ &&
+      cartesian_command.size() == kMaxNumberOfCartesianVelocities &&
+      elbow_command.size() == kMaxNumberOfElbowCommands) {
+    auto cartesian_velocities_array = std::array<double, kMaxNumberOfCartesianVelocities>();
+    std::copy(cartesian_command.begin(), cartesian_command.end(),
+              cartesian_velocities_array.begin());
+    auto elbow_command_array = std::array<double, kMaxNumberOfElbowCommands>();
+    std::copy(elbow_command.begin(), elbow_command.end(), elbow_command_array.begin());
+
+    writeOnceCartesianVelocity(cartesian_velocities_array, elbow_command_array);
+
+    return;
+  }
+
+  if (cartesian_pose_interface_active_ &&
+      cartesian_command.size() == kMaxNumberOfCartesianPoseCommands &&
+      elbow_command.size() == kMaxNumberOfElbowCommands) {
+    auto cartesian_pose_command = std::array<double, kMaxNumberOfCartesianPoseCommands>();
+    std::copy(cartesian_command.begin(), cartesian_command.end(), cartesian_pose_command.begin());
+    auto elbow_command_array = std::array<double, kMaxNumberOfElbowCommands>();
+    std::copy(elbow_command.begin(), elbow_command.end(), elbow_command_array.begin());
+    writeOnceCartesianPose(cartesian_pose_command, elbow_command_array);
+
+    return;
+  }
+
+  // This part should not be reached
+  throw std::invalid_argument("Cartesian command has unknown size " +
+                              std::to_string(cartesian_command.size()) + " and elbow size " +
+                              std::to_string(elbow_command.size()));
+}
+
+void Robot::writeOnceJointEfforts(const std::array<double, 7>& efforts) {
   std::lock_guard<std::mutex> lock(control_mutex_);
 
   auto torque_command = franka::Torques(efforts);
@@ -178,55 +252,33 @@ franka::CartesianPose Robot::preProcessCartesianPose(const franka::CartesianPose
   return filtered_cartesian_pose;
 }
 
-void Robot::writeOnce(const std::array<double, 6>& cartesian_velocities) {
+void Robot::writeOnceCartesianVelocity(const std::array<double, 6>& cartesian_velocities,
+                                       const std::optional<std::array<double, 2>>& elbow_command) {
   if (!active_control_) {
     throw std::runtime_error("Control hasn't been started");
   }
 
   std::lock_guard<std::mutex> lock(control_mutex_);
 
-  auto velocity_command = franka::CartesianVelocities(cartesian_velocities);
+  auto velocity_command =
+      elbow_command.has_value()
+          ? franka::CartesianVelocities(cartesian_velocities, elbow_command.value())
+          : franka::CartesianVelocities(cartesian_velocities);
   auto filtered_velocity_command = preProcessCartesianVelocities(velocity_command);
   active_control_->writeOnce(filtered_velocity_command);
 }
 
-void Robot::writeOnce(const std::array<double, 6>& cartesian_velocities,
-                      const std::array<double, 2>& elbow_command) {
+void Robot::writeOnceCartesianPose(const std::array<double, 16>& cartesian_pose,
+                                   const std::optional<std::array<double, 2>>& elbow_command) {
   if (!active_control_) {
     throw std::runtime_error("Control hasn't been started");
   }
 
   std::lock_guard<std::mutex> lock(control_mutex_);
 
-  auto velocity_command = franka::CartesianVelocities(cartesian_velocities, elbow_command);
-  auto filtered_velocity_command = preProcessCartesianVelocities(velocity_command);
-
-  active_control_->writeOnce(filtered_velocity_command);
-}
-
-void Robot::writeOnce(const std::array<double, 16>& cartesian_pose) {
-  if (!active_control_) {
-    throw std::runtime_error("Control hasn't been started");
-  }
-
-  std::lock_guard<std::mutex> lock(control_mutex_);
-
-  auto pose_command = franka::CartesianPose(cartesian_pose);
-  auto filtered_pose = preProcessCartesianPose(pose_command);
-
-  active_control_->writeOnce(filtered_pose);
-}
-
-void Robot::writeOnce(const std::array<double, 16>& cartesian_pose,
-                      const std::array<double, 2>& elbow_command) {
-  if (!active_control_) {
-    throw std::runtime_error("Control hasn't been started");
-  }
-
-  std::lock_guard<std::mutex> lock(control_mutex_);
-
-  auto pose_command = franka::CartesianPose(cartesian_pose, elbow_command);
-
+  auto pose_command = elbow_command.has_value()
+                          ? franka::CartesianPose(cartesian_pose, elbow_command.value())
+                          : franka::CartesianPose(cartesian_pose);
   auto filtered_pose = preProcessCartesianPose(pose_command);
 
   active_control_->writeOnce(filtered_pose);
