@@ -12,6 +12,7 @@ Requires libfranka >= 0.15.0 and franka_description >= 0.5.0 requires ROS 2 Humb
 * Style: Adjust clang-tidy config due to changes in generate_parameter_library()
 * Chore: Eliminate annoying CMake configure time messages
 * Feat: Added prefix to single robot control
+* Doc: Added a link to the Gazebo README.md for better visibility
 
 * Breaking feat: Automatically spawn command interfaces depending on the configured ones coming from the URDF
 
