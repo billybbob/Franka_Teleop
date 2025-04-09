@@ -69,16 +69,21 @@ class FrankaRobotStateBroadcaster : public controller_interface::ControllerInter
    public:
     // Constructor for the nested class
     // NOLINTBEGIN
-    explicit FrankaRobotStateRealtimePublisher(PublisherSharedPtr publisher)
+    explicit FrankaRobotStateRealtimePublisher(PublisherSharedPtr publisher,
+                                               int try_count,
+                                               int sleep_time)
         : realtime_tools::RealtimePublisher<franka_msgs::msg::FrankaRobotState>(
-              std::move(publisher)) {}
+              std::move(publisher)),
+          try_count_(try_count),
+          sleep_time_(sleep_time) {}
     // NOLINTEND
     // we only need to hide the trylock() method
     bool trylock();
     [[nodiscard]] int try_count() const { return try_count_; }
 
    private:
-    const int try_count_ = 10;
+    int try_count_;   // how many times to attempt to lock before bailing out with error message
+    int sleep_time_;  // sleep interval in microseconds between lock attempts
   };
   // shared_ptr to object of override class
   std::shared_ptr<FrankaRobotStateBroadcaster::FrankaRobotStateRealtimePublisher>
@@ -114,6 +119,18 @@ class FrankaRobotStateBroadcaster : public controller_interface::ControllerInter
   const std::string kExternalJointTorques = "~/external_joint_torques";
   const std::string kDesiredJointStates = "~/desired_joint_states";
 
+  const int kLock_try_count = 5;
+  const int kLock_sleep_interval = 5;
+  const bool kLock_log_error = true;
+  const bool kLock_update_success = false;
+
+  const std::string kLockTryCount = "lock_try_count";
+  const std::string kLockSleepInterval = "lock_sleep_interval";
+  const std::string kLockLogError = "lock_log_error";
+  const std::string kLockUpdateSuccess = "lock_update_success";
+
+  bool lock_log_error_;
+  bool lock_update_success_;
   franka_msgs::msg::FrankaRobotState franka_robot_state_msg_;
   std::unique_ptr<franka_semantic_components::FrankaRobotState> franka_robot_state_;
 };
