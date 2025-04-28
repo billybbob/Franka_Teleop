@@ -6,6 +6,7 @@ Pending Release:
 
 Requires libfranka >= 0.15.0 and franka_description >= 0.5.0 requires ROS 2 Humble
 
+* Fix: FrankaRobotStateBroadcaster Lock issue - add configurable timeout (see controllers.yaml)
 * Add: vcstool import for compatible libfranka and franka_description
 * Fix: Franka robot state broadcaster GitHub Issue #94 and #105
 * Test: Re-enable a test and provide Mock functions
