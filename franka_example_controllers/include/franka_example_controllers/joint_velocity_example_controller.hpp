@@ -15,9 +15,11 @@
 #pragma once
 
 #include <string>
+#include <mutex>
 
 #include <controller_interface/controller_interface.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
@@ -44,6 +46,13 @@ class JointVelocityExampleController : public controller_interface::ControllerIn
   bool is_gazebo{false};
   const int num_joints = 7;
   rclcpp::Duration elapsed_time_ = rclcpp::Duration(0, 0);
+
+  // === Ajout pour souscription à /cmd_vel ===
+  rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr cmd_vel_sub_;
+  std_msgs::msg::Float32MultiArray::SharedPtr last_joint_velocities_;
+  std::mutex cmd_mutex_;
+
+  void cmdVelCallback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
 };
 
 }  // namespace franka_example_controllers
