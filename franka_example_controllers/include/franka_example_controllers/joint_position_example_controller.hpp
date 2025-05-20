@@ -15,18 +15,19 @@
 #pragma once
 
 #include <string>
+#include <array>
+#include <vector>
 
-#include <Eigen/Eigen>
 #include <controller_interface/controller_interface.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include "franka_semantic_components/franka_robot_state.hpp"
+#include <std_msgs/msg/float32_multi_array.hpp>
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
 namespace franka_example_controllers {
 
 /**
- * The joint position example controller moves in a periodic movement.
+ * The joint position example controller
  */
 class JointPositionExampleController : public controller_interface::ControllerInterface {
  public:
@@ -42,16 +43,29 @@ class JointPositionExampleController : public controller_interface::ControllerIn
 
  private:
   std::string arm_id_;
-  bool is_gazebo_{false};
   std::string robot_description_;
-  const int num_joints = 7;
-  std::array<double, 7> initial_q_{0, 0, 0, 0, 0, 0, 0};
-  double elapsed_time_ = 0.0;
-  double initial_robot_time_ = 0.0;
-  double robot_time_ = 0.0;
-  double trajectory_period_ = 0.001;
+
+  std::mutex cmd_mutex_;
+  std_msgs::msg::Float32MultiArray::SharedPtr last_joint_positions_;
+
+  bool is_gazebo_{false};
+  bool use_external_targets_{false};
   bool initialization_flag_{true};
-  rclcpp::Time start_time_;
+  const int num_joints{7};
+  
+  std::vector<double> initial_q_;
+  std::vector<double> target_positions_;
+  
+  double initial_robot_time_{0.0};
+  double robot_time_{0.0};
+  double elapsed_time_{0.0};
+  double trajectory_period_{0.001};  // Assuming a default value
+  
+  // Modifié pour utiliser le bon type compatible avec le code source
+  rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr joint_command_subscriber_;
+  
+  // Fonction de callback pour traiter les messages entrants
+  void commandCallback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
 };
 
 }  // namespace franka_example_controllers
