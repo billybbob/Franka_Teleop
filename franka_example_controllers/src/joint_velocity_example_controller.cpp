@@ -1,16 +1,4 @@
 // Copyright (c) 2023 Franka Robotics GmbH
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 #include <franka_example_controllers/default_robot_behavior_utils.hpp>
 #include <franka_example_controllers/joint_velocity_example_controller.hpp>
@@ -20,8 +8,10 @@
 #include <cmath>
 #include <exception>
 #include <string>
+#include <mutex>
 
-#include <Eigen/Eigen>
+#include <Eigen/Dense>
+#include <std_msgs/msg/float32_multi_array.hpp>
 
 namespace franka_example_controllers {
 
@@ -30,9 +20,11 @@ JointVelocityExampleController::command_interface_configuration() const {
   controller_interface::InterfaceConfiguration config;
   config.type = controller_interface::interface_configuration_type::INDIVIDUAL;
 
+  // Configurer les interfaces pour les 7 articulations principales
   for (int i = 1; i <= num_joints; ++i) {
     config.names.push_back(arm_id_ + "_joint" + std::to_string(i) + "/velocity");
-  }
+  }  
+
   return config;
 }
 
@@ -44,29 +36,41 @@ JointVelocityExampleController::state_interface_configuration() const {
     config.names.push_back(arm_id_ + "_joint" + std::to_string(i) + "/position");
     config.names.push_back(arm_id_ + "_joint" + std::to_string(i) + "/velocity");
   }
+
   return config;
 }
 
 controller_interface::return_type JointVelocityExampleController::update(
-    const rclcpp::Time& /*time*/,
-    const rclcpp::Duration& period) {
-  elapsed_time_ = elapsed_time_ + period;
-  rclcpp::Duration time_max(8.0, 0.0);
-  double omega_max = 0.1;
-  double cycle = std::floor(std::pow(
-      -1.0, (elapsed_time_.seconds() - std::fmod(elapsed_time_.seconds(), time_max.seconds())) /
-                time_max.seconds()));
-  double omega = cycle * omega_max / 2.0 *
-                 (1.0 - std::cos(2.0 * M_PI / time_max.seconds() * elapsed_time_.seconds()));
+  const rclcpp::Time& /*time*/,
+  const rclcpp::Duration& /*period*/) {
 
-  for (int i = 0; i < num_joints; i++) {
-    if (i == 3 || i == 4) {
-      command_interfaces_[i].set_value(omega);
-    } else {
+  std_msgs::msg::Float32MultiArray::SharedPtr cmd;
+  {
+    std::lock_guard<std::mutex> lock(cmd_mutex_);
+    cmd = last_joint_velocities_;
+  }
+
+  if (cmd && !cmd->data.empty()) {
+    // Appliquer les vitesses à toutes les articulations
+    for (int i = 0; i < num_joints; i++) {
+      if (i < static_cast<int>(cmd->data.size())) {
+        command_interfaces_[i].set_value(cmd->data[i]);
+      }
+    }
+    
+  } else {
+    // Si pas de commande reçue, mettre toutes les vitesses à zéro
+    for (int i = 0; i < command_interfaces_.size(); i++) {
       command_interfaces_[i].set_value(0.0);
     }
   }
+
   return controller_interface::return_type::OK;
+}
+
+void JointVelocityExampleController::cmdVelCallback(const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
+  std::lock_guard<std::mutex> lock(cmd_mutex_);
+  last_joint_velocities_ = msg;
 }
 
 CallbackReturn JointVelocityExampleController::on_init() {
@@ -98,6 +102,10 @@ CallbackReturn JointVelocityExampleController::on_configure(
 
   arm_id_ = robot_utils::getRobotNameFromDescription(robot_description_, get_node()->get_logger());
 
+  // Subscription to cmd_vel
+  cmd_vel_sub_ = get_node()->create_subscription<std_msgs::msg::Float32MultiArray>(
+    "/joint_velocities", 10, std::bind(&JointVelocityExampleController::cmdVelCallback, this, std::placeholders::_1));
+
   if (!is_gazebo) {
     auto client = get_node()->create_client<franka_msgs::srv::SetFullCollisionBehavior>(
         "service_server/set_full_collision_behavior");
@@ -125,7 +133,7 @@ CallbackReturn JointVelocityExampleController::on_activate(
 }
 
 }  // namespace franka_example_controllers
+
 #include "pluginlib/class_list_macros.hpp"
-// NOLINTNEXTLINE
 PLUGINLIB_EXPORT_CLASS(franka_example_controllers::JointVelocityExampleController,
                        controller_interface::ControllerInterface)
