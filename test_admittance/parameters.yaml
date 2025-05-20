@@ -1,0 +1,11 @@
+test_admittance:
+  ros__parameters:
+    channel: "SimpleChannelUDP"
+    ff_device_ip_address: "192.168.100.53"
+    ff_device_param_file: "/etc/Haption/desktop_6D_n76.param"
+    local_ip_address: "0.0.0.0"
+    speed_factor: 1.0
+    force_factor: 1.0
+    max_force: 40.0
+    horizontal_table_z: -0.1
+    penalty_stiffness: 1000.0
