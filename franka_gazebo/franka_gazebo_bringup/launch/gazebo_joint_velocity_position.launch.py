@@ -1,17 +1,3 @@
-# Copyright (c) 2024 Franka Robotics GmbH
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import os
 import xacro
 
@@ -75,6 +61,10 @@ def generate_launch_description():
     load_gripper = LaunchConfiguration(load_gripper_name)
     franka_hand = LaunchConfiguration(franka_hand_name)
     arm_id = LaunchConfiguration(arm_id_name)
+
+    # Ajout de paramètres pour le pont ROS-Gazebo
+    use_sim_time = LaunchConfiguration('use_sim_time', default='true')
+    log_level = LaunchConfiguration('log_level', default='info')
 
     load_gripper_launch_argument = DeclareLaunchArgument(
             load_gripper_name,
@@ -209,10 +199,31 @@ def generate_launch_description():
         output='screen'                 # Afficher la sortie à l'écran
     )
 
+    # Nœud pour connaitre la position de la fiole
+    fiole_pose_monitor = Node(
+        package="franka_teleop",
+        executable="fiole_pose_monitor",
+        name="fiole_pose_monitor",
+        output="screen",
+        parameters=[{"use_sim_time": use_sim_time, "object_name": "Fiole_world", "poll_rate": 10.0}],
+    )
+
+    # Nœud pour connaitre la distance entre les parroies et l'effecteur du robot
+    distance_parroies_node = Node(
+        package='franka_teleop',        # Nom du package contenant le script
+        executable='distance_parroies',               # Nom de l'exécutable
+        name='distance_parroies_node',                # Nom du nœud
+        output='screen'                 # Afficher la sortie à l'écran
+    )
+
     return LaunchDescription([
         load_gripper_launch_argument,
         franka_hand_launch_argument,
         arm_id_launch_argument,
+        DeclareLaunchArgument('use_sim_time', default_value='true',
+                             description='Use simulation (Gazebo) clock if true'),
+        DeclareLaunchArgument('log_level', default_value='info',
+                             description='Log level for the bridge'),
         gazebo_custom_world,
         robot_state_publisher,
         rviz,
@@ -255,4 +266,6 @@ def generate_launch_description():
         controller_switcher_node,
         guide_virtuel_node,
         force_joystick_node,
+        fiole_pose_monitor,
+        distance_parroies_node,
     ])
