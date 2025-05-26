@@ -14,9 +14,10 @@ public:
     struct CartesianPose {
         double x, y, z;           // Position
         double qx, qy, qz, qw;    // Orientation (quaternion)
+        double trigger;           // Valeur de la gâchette
     };
 
-    Offset_Position() : Node("Offset_Position"), in_pose_mode_(false), initial_reference_set_(false) {
+    Offset_Position() : Node("Offset_Position"), in_pose_mode_(false), trigger_value_(0.0), initial_reference_set_(false), coeff_homo_(1.0) {
         // Abonnement au topic valeur_effecteur (contient des valeurs cartésiennes avec quaternion)
         virtuose_subscription = this->create_subscription<std_msgs::msg::Float32MultiArray>(
             "/valeur_effecteur", 10,
@@ -35,7 +36,7 @@ public:
             std::bind(&Offset_Position::mode_position_vitesse_callback, this, std::placeholders::_1)
         );
     
-        // Création du publisher cmd_pose pour les commandes cartésiennes avec quaternions
+        // Création du publisher cmd_pose pour les commandes cartésiennes avec quaternions et trigger
         cmd_pose_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/cmd_pose", 10);
 
         // Initialiser la position du robot
@@ -55,6 +56,7 @@ public:
         controller_pose_.qy = 0;
         controller_pose_.qz = 0;
         controller_pose_.qw = 1;
+        controller_pose_.trigger = 0.0;
 
         // Initialiser la position de référence (sera mise à jour lors du passage en mode position)
         reference_robot_pose_ = robot_pose_;
@@ -103,12 +105,18 @@ private:
     // Variable afin d'enregistrer la position du robot seulement au moment où l'on passe en mode position
     double pose_enregistrer_;
 
+    // Variable pour définir le coefficient d'homothétie
+    double coeff_homo_;
+
     // Drapeaux pour suivre les réceptions de données
     bool robot_pose_received_;
     bool controller_pose_received_;
 
     // Ajout d'un flag pour suivre l'état du mode
     bool in_pose_mode_;
+
+    // Valeur de la gâchette
+    double trigger_value_;
     
     // Flag pour indiquer si la référence initiale a été définie
     bool initial_reference_set_;
@@ -148,6 +156,15 @@ private:
                 RCLCPP_INFO(this->get_logger(), "Nouvelle référence du robot définie depuis le mode vitesse: [%f, %f, %f] [%f, %f, %f, %f]",
                     reference_robot_pose_.x, reference_robot_pose_.y, reference_robot_pose_.z,
                     reference_robot_pose_.qx, reference_robot_pose_.qy, reference_robot_pose_.qz, reference_robot_pose_.qw);
+            }
+        }
+
+        // Récupérer le coefficient d'homothétie s'il est présent (4ème valeur à l'index 3)
+        if (msg->data.size() >= 4) {
+            double new_coeff_homo = static_cast<double>(msg->data[3]);
+            if (new_coeff_homo != coeff_homo_) {
+                coeff_homo_ = new_coeff_homo;
+                RCLCPP_INFO(this->get_logger(), "Coefficient d'homothétie mis à jour: %f", coeff_homo_);
             }
         }
 
@@ -218,6 +235,13 @@ private:
         controller_pose_.qz = static_cast<double>(msg->data[5]) - 0.171235;
         controller_pose_.qw = static_cast<double>(msg->data[6]);
 
+        // Récupérer la valeur de la gâchette (8ème élément)
+        trigger_value_ = static_cast<double>(msg->data[7]);
+        controller_pose_.trigger = trigger_value_;
+        
+        // Afficher la valeur de la gâchette pour le débogage
+        RCLCPP_DEBUG(this->get_logger(), "Valeur de la gâchette reçue: %f", trigger_value_);
+
         controller_pose_received_ = true;
 
         // Si nous venons juste de passer en mode position et n'avons pas encore défini la référence
@@ -237,6 +261,12 @@ private:
         }
     }
     
+    // Convertir la valeur de la gâchette en commande pour la pince
+    // La gâchette: 0 (ouverte) à 1 (fermée)
+    // La pince: 0.04 (ouverte) à 0 (fermée)
+    double convertTriggerToGripperCommand(double trigger_value) {
+        return 0.04 - (trigger_value * 0.04);
+    }
 
     // Fonction pour calculer et envoyer la commande de position
     void calculateAndSendCommand() {
@@ -247,25 +277,28 @@ private:
         CartesianPose rotated_delta = controller_pose_;
         
         // On remplit le vecteur 'data' avec les valeurs transformées
-        twist_msg.data.resize(7);  // 7 valeurs: x, y, z, qx, qy, qz, qw
+        twist_msg.data.resize(8);  // 8 valeurs: x, y, z, qx, qy, qz, qw, gripper
         
         // Configuration du layout du message (optionnel mais recommandé)
         twist_msg.layout.dim.push_back(std_msgs::msg::MultiArrayDimension());
         twist_msg.layout.dim[0].label = "pose";
-        twist_msg.layout.dim[0].size = 7;  // 3 positions + 4 quaternion
-        twist_msg.layout.dim[0].stride = 7;
+        twist_msg.layout.dim[0].size = 8;  // 3 positions + 4 quaternion + gripper
+        twist_msg.layout.dim[0].stride = 8;
         twist_msg.layout.data_offset = 0;
         
         // Appliquer les transformations des positions à partir de la position de référence du robot
-        twist_msg.data[0] = (reference_robot_pose_.x + rotated_delta.x);
-        twist_msg.data[1] = (reference_robot_pose_.y + rotated_delta.y);
-        twist_msg.data[2] = (reference_robot_pose_.z + rotated_delta.z);
+        twist_msg.data[0] = reference_robot_pose_.x + (rotated_delta.x * coeff_homo_);
+        twist_msg.data[1] = reference_robot_pose_.y - (rotated_delta.z * coeff_homo_);
+        twist_msg.data[2] = reference_robot_pose_.z + (rotated_delta.y * coeff_homo_);
 
         // Calculer l'orientation finale en utilisant le quaternion transformé
-        twist_msg.data[3] = reference_robot_pose_.qx + rotated_delta.qx;
-        twist_msg.data[4] = reference_robot_pose_.qy + rotated_delta.qy;
-        twist_msg.data[5] = reference_robot_pose_.qz + rotated_delta.qz;
+        twist_msg.data[3] = reference_robot_pose_.qx + (rotated_delta.qx * coeff_homo_);
+        twist_msg.data[4] = reference_robot_pose_.qy + (rotated_delta.qy * coeff_homo_);
+        twist_msg.data[5] = reference_robot_pose_.qz + (rotated_delta.qz * coeff_homo_);
         twist_msg.data[6] = rotated_delta.qw;
+
+        // Ajouter la valeur convertie de la gâchette pour commander la pince
+        twist_msg.data[7] = convertTriggerToGripperCommand(trigger_value_);
 
         // Mettre à jour la dernière position envoyée
         last_sent_pose_ = controller_pose_;
@@ -273,10 +306,12 @@ private:
         // Publier sur cmd_pose
         cmd_pose_->publish(twist_msg);
 
-        RCLCPP_INFO(this->get_logger(), "Translations envoyées : [%f, %f, %f]",
-            twist_msg.data[0], twist_msg.data[1], twist_msg.data[2]);
+        RCLCPP_INFO(this->get_logger(), "Commande de position envoyée : [%f, %f, %f] avec coeff_homo_: %f",
+            twist_msg.data[0], twist_msg.data[1], twist_msg.data[2], coeff_homo_);
         RCLCPP_INFO(this->get_logger(), "Quaternions envoyés: [%f, %f, %f, %f]",
             twist_msg.data[3], twist_msg.data[4], twist_msg.data[5], twist_msg.data[6]);
+        RCLCPP_INFO(this->get_logger(), "Commande de pince envoyée: %f (gâchette: %f)",
+            twist_msg.data[7], trigger_value_);
     }
 };
 
