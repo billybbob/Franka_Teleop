@@ -35,6 +35,8 @@ setup(
             'fusion_joint_state = franka_teleop.fusion_joint_state:main',
             'guide_virtuel = franka_teleop.guide_virtuel:main',
             'force_joystick = franka_teleop.force_joystick:main',
+            'fiole_pose_monitor = franka_teleop.fiole_pose_monitor:main',
+            'distance_parois = franka_teleop.distance_parois:main',
         ],
     },
 )
