@@ -243,7 +243,7 @@ controller_interface::return_type GripperExampleController::update(const rclcpp:
       double velocity = position_gain_ * error;
       
       // Clamp velocity for safety
-      double max_safe_velocity = 0.1;  // Maximum safe velocity
+      double max_safe_velocity = 0.5;  // Maximum safe velocity
       if (velocity > max_safe_velocity) {
         velocity = max_safe_velocity;
       } else if (velocity < -max_safe_velocity) {
