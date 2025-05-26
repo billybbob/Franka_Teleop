@@ -43,7 +43,7 @@ private:
     std::vector<rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr> joint_publishers;
    
     // Constantes de configuration
-    const double Vmax_base = 0.1;  // Vitesse maximale de base
+    const double Vmax_base = 0.3;  // Vitesse maximale de base
     double speed_factor_;  // Facteur de vitesse provenant de la 4ème valeur du topic Mode_Pose_Vitesse
     double Vmax;  // Vitesse maximale ajustée (calculée comme Vmax_base * speed_factor_)
 
@@ -64,14 +64,14 @@ private:
     // Valeurs du contrôleur à dépasser pour mettre en mouvement le robot avec limites pour normalisation
     std::vector<AxisLimits> Value_for_deplacement = {
         {0.22, 0.28, 0.37, 0.13},               // Valeur à dépasser pour la translation suivant l'axe x (max 0.37, min  0.13)
-        {-0.145, 0.105, 0.23, -0.27},              // Valeur à dépasser pour la translation suivant l'axe y (max 0.23, min -0.27)
-        {0.05875, 0.11125, 0.19, -0.02},            // Valeur à dépasser pour la translation suivant l'axe z (max 0.19, min -0.02)
+        {-0.05, 0.01, 0.23, -0.27},              // Valeur à dépasser pour la translation suivant l'axe y (max 0.23, min -0.27)
+        {0.01, 0.07, 0.19, -0.1},            // Valeur à dépasser pour la translation suivant l'axe z (max 0.19, min -0.1)
     };
     
     // Valeurs du contrôleur à dépasser pour les rotations en quaternion
     std::vector<AxisLimits> Value_for_rotation = {
-        {-0.075, 0.375, 0.55, -0.25},               // Rotation autour de l'axe x (Roll)
-        {-0.225, 0.225, 0.9, -0.9},               // Rotation autour de l'axe y (Pitch)
+        {-0.2, 0.2, 0.8, -0.8},               // Rotation autour de l'axe x (Roll)
+        {0.4, 0.8, 1.5, -0.3},               // Rotation autour de l'axe y (Pitch)
         {-0.225, 0.225, 0.9, -0.9},               // Rotation autour de l'axe z (Yaw)
     };
 
