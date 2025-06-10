@@ -16,9 +16,11 @@
 
 #include <Eigen/Dense>
 #include <string>
+#include <mutex>
 
 #include <controller_interface/controller_interface.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
 
 #include <franka_example_controllers/robot_utils.hpp>
 #include <franka_semantic_components/franka_cartesian_pose_interface.hpp>
@@ -44,10 +46,21 @@ class CartesianPoseExampleController : public controller_interface::ControllerIn
   CallbackReturn on_deactivate(const rclcpp_lifecycle::State& previous_state) override;
 
  private:
+  void cmd_pose_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
+
   std::unique_ptr<franka_semantic_components::FrankaCartesianPoseInterface> franka_cartesian_pose_;
 
+  // Pose actuelle (pour l'initialisation)
   Eigen::Quaterniond orientation_;
   Eigen::Vector3d position_;
+
+  // Commandes de pose cible (thread-safe)
+  Eigen::Quaterniond target_orientation_;
+  Eigen::Vector3d target_position_;
+  std::mutex cmd_pose_mutex_;
+
+  // Subscriber pour les commandes de pose
+  rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr cmd_pose_subscriber_;
 
   const bool k_elbow_activated_{false};
   bool initialization_flag_{true};
