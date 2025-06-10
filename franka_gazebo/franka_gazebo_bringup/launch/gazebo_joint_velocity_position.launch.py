@@ -34,7 +34,7 @@ def get_robot_description(context: LaunchContext, arm_id, load_gripper, franka_h
             'arm_id': arm_id_str, 
             'hand': load_gripper_str, 
             'ros2_control': 'true', 
-            'gazebo': 'true', 
+            'gazebo': 'false', 
             'ee_id': franka_hand_str
         }
     )
@@ -151,6 +151,19 @@ def generate_launch_description():
         output='screen'
     )
 
+    # Charger les contrôleurs cartésiens en état inactif
+    cartesian_velocity_example_controller = ExecuteProcess(
+        cmd=['ros2', 'control', 'load_controller', '--set-state', 'inactive',
+                'cartesian_velocity_example_controller'],
+        output='screen'
+    )
+
+    cartesian_pose_example_controller = ExecuteProcess(
+        cmd=['ros2', 'control', 'load_controller', '--set-state', 'inactive',
+                'cartesian_pose_example_controller'],
+        output='screen'
+    )
+
     # Nœud pour lancer le solveur IK
     ik_solver_node = Node(
         package='franka_teleop',      # Nom du package contenant le script
@@ -183,19 +196,19 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Nœud pour lancer le guide_virtuel
-    guide_virtuel_node = Node(
+    # Nœud pour lancer le force_position
+    force_position_node = Node(
         package='franka_teleop',        # Nom du package contenant le script
-        executable='guide_virtuel',               # Nom de l'exécutable
-        name='guide_virtuel_node',                # Nom du nœud
+        executable='force_position',               # Nom de l'exécutable
+        name='force_position_node',                # Nom du nœud
         output='screen'                 # Afficher la sortie à l'écran
     )
 
-    # Nœud pour lancer le force_joystick
-    force_joystick_node = Node(
+    # Nœud pour lancer le force_vitesse
+    force_vitesse_node = Node(
         package='franka_teleop',        # Nom du package contenant le script
-        executable='force_joystick',               # Nom de l'exécutable
-        name='force_joystick_node',                # Nom du nœud
+        executable='force_vitesse',               # Nom de l'exécutable
+        name='force_vitesse_node',                # Nom du nœud
         output='screen'                 # Afficher la sortie à l'écran
     )
 
@@ -209,10 +222,18 @@ def generate_launch_description():
     )
 
     # Nœud pour connaitre la distance entre les parroies et l'effecteur du robot
-    distance_parroies_node = Node(
+    distance_parois_node = Node(
         package='franka_teleop',        # Nom du package contenant le script
-        executable='distance_parroies',               # Nom de l'exécutable
-        name='distance_parroies_node',                # Nom du nœud
+        executable='distance_parois',               # Nom de l'exécutable
+        name='distance_parois_node',                # Nom du nœud
+        output='screen'                 # Afficher la sortie à l'écran
+    )
+
+    # Nœud pour lancer guide_virtuel
+    guide_virtuel_node = Node(
+        package='franka_teleop',        # Nom du package contenant le script
+        executable='guide_virtuel',               # Nom de l'exécutable
+        name='guide_virtuel_node',                # Nom du nœud
         output='screen'                 # Afficher la sortie à l'écran
     )
 
@@ -252,6 +273,12 @@ def generate_launch_description():
                 on_exit=[joint_velocity_example_controller],
             )
         ),
+        RegisterEventHandler(
+            event_handler=OnProcessExit(
+                target_action=load_joint_state_broadcaster,
+                on_exit=[cartesian_velocity_example_controller],
+            )
+        ),
         Node(
             package='joint_state_publisher',
             executable='joint_state_publisher',
@@ -264,8 +291,9 @@ def generate_launch_description():
         ig_solver_node,
         mgd_node,
         controller_switcher_node,
-        guide_virtuel_node,
-        force_joystick_node,
+        force_position_node,
+        force_vitesse_node,
         fiole_pose_monitor,
-        distance_parroies_node,
+        distance_parois_node,
+        guide_virtuel_node,
     ])
