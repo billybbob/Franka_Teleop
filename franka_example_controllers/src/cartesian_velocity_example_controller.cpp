@@ -20,8 +20,10 @@
 #include <cmath>
 #include <exception>
 #include <string>
+#include <mutex>
 
 #include <Eigen/Eigen>
+#include <std_msgs/msg/float32_multi_array.hpp>
 
 namespace franka_example_controllers {
 
@@ -42,19 +44,17 @@ CartesianVelocityExampleController::state_interface_configuration() const {
 
 controller_interface::return_type CartesianVelocityExampleController::update(
     const rclcpp::Time& /*time*/,
-    const rclcpp::Duration& period) {
-  elapsed_time_ = elapsed_time_ + period;
-
-  double cycle = std::floor(pow(
-      -1.0,
-      (elapsed_time_.seconds() - std::fmod(elapsed_time_.seconds(), k_time_max_)) / k_time_max_));
-  double v =
-      cycle * k_v_max_ / 2.0 * (1.0 - std::cos(2.0 * M_PI / k_time_max_ * elapsed_time_.seconds()));
-  double v_x = std::cos(k_angle_) * v;
-  double v_z = -std::sin(k_angle_) * v;
-
-  Eigen::Vector3d cartesian_linear_velocity(v_x, 0.0, v_z);
-  Eigen::Vector3d cartesian_angular_velocity(0.0, 0.0, 0.0);
+    const rclcpp::Duration& /*period*/) {
+  
+  // Récupération thread-safe des dernières commandes de vitesse
+  Eigen::Vector3d cartesian_linear_velocity;
+  Eigen::Vector3d cartesian_angular_velocity;
+  
+  {
+    std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
+    cartesian_linear_velocity = current_linear_velocity_;
+    cartesian_angular_velocity = current_angular_velocity_;
+  }
 
   if (franka_cartesian_velocity_->setCommand(cartesian_linear_velocity,
                                              cartesian_angular_velocity)) {
@@ -66,48 +66,121 @@ controller_interface::return_type CartesianVelocityExampleController::update(
   }
 }
 
-CallbackReturn CartesianVelocityExampleController::on_init() {
-  return CallbackReturn::SUCCESS;
+void CartesianVelocityExampleController::cmd_vel_callback(
+    const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
+  
+  // Vérification de la taille du message (6 éléments : 3 linéaires + 3 angulaires + pince)
+  if (msg->data.size() != 7) {
+    RCLCPP_WARN(get_node()->get_logger(), 
+                "Received cmd_vel with incorrect size: %zu, expected 7", 
+                msg->data.size());
+    return;
+  }
+
+  std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
+  
+  // Extraction des vitesses linéaires (x, y, z)
+  current_linear_velocity_(0) = msg->data[0];  // v_x
+  current_linear_velocity_(1) = msg->data[1];  // v_y
+  current_linear_velocity_(2) = msg->data[2];  // v_z
+  
+  // Extraction des vitesses angulaires (rx, ry, rz)
+  current_angular_velocity_(0) = msg->data[3];  // omega_x
+  current_angular_velocity_(1) = msg->data[4];  // omega_y
+  current_angular_velocity_(2) = msg->data[5];  // omega_z
+
+  RCLCPP_DEBUG(get_node()->get_logger(), 
+               "Received cmd_vel: linear=[%.3f, %.3f, %.3f], angular=[%.3f, %.3f, %.3f]",
+               current_linear_velocity_(0), current_linear_velocity_(1), current_linear_velocity_(2),
+               current_angular_velocity_(0), current_angular_velocity_(1), current_angular_velocity_(2));
 }
 
-CallbackReturn CartesianVelocityExampleController::on_configure(
+controller_interface::CallbackReturn CartesianVelocityExampleController::on_init() {
+  return controller_interface::CallbackReturn::SUCCESS;
+}
+
+controller_interface::CallbackReturn CartesianVelocityExampleController::on_configure(
     const rclcpp_lifecycle::State& /*previous_state*/) {
+  
   franka_cartesian_velocity_ =
       std::make_unique<franka_semantic_components::FrankaCartesianVelocityInterface>(
           franka_semantic_components::FrankaCartesianVelocityInterface(k_elbow_activated_));
 
-  auto client = get_node()->create_client<franka_msgs::srv::SetFullCollisionBehavior>(
-      "service_server/set_full_collision_behavior");
-  auto request = DefaultRobotBehavior::getDefaultCollisionBehaviorRequest();
+  // Création du subscriber pour /cmd_vel
+  cmd_vel_subscriber_ = get_node()->create_subscription<std_msgs::msg::Float32MultiArray>(
+      "/cmd_vel",
+      10,
+      std::bind(&CartesianVelocityExampleController::cmd_vel_callback, this, std::placeholders::_1));
 
-  auto future_result = client->async_send_request(request);
-  future_result.wait_for(robot_utils::time_out);
+  // Initialisation des vitesses à zéro
+  current_linear_velocity_.setZero();
+  current_angular_velocity_.setZero();
 
-  auto success = future_result.get();
-  if (!success) {
-    RCLCPP_FATAL(get_node()->get_logger(), "Failed to set default collision behavior.");
-    return CallbackReturn::ERROR;
-  } else {
-    RCLCPP_INFO(get_node()->get_logger(), "Default collision behavior set.");
+  // Configuration du comportement de collision de manière sécurisée
+  try {
+    auto client = get_node()->create_client<franka_msgs::srv::SetFullCollisionBehavior>(
+        "service_server/set_full_collision_behavior");
+    
+    if (!client->wait_for_service(std::chrono::seconds(5))) {
+      RCLCPP_WARN(get_node()->get_logger(), 
+                  "Collision behavior service not available, continuing without setting it");
+    } else {
+      auto request = DefaultRobotBehavior::getDefaultCollisionBehaviorRequest();
+      auto future_result = client->async_send_request(request);
+      
+      // Attendre de manière non-bloquante
+      if (future_result.wait_for(std::chrono::seconds(2)) == std::future_status::ready) {
+        auto success = future_result.get();
+        if (success) {
+          RCLCPP_INFO(get_node()->get_logger(), "Default collision behavior set.");
+        } else {
+          RCLCPP_WARN(get_node()->get_logger(), "Failed to set default collision behavior.");
+        }
+      } else {
+        RCLCPP_WARN(get_node()->get_logger(), "Timeout setting collision behavior.");
+      }
+    }
+  } catch (const std::exception& e) {
+    RCLCPP_WARN(get_node()->get_logger(), 
+                "Exception while setting collision behavior: %s", e.what());
   }
 
-  return CallbackReturn::SUCCESS;
+  RCLCPP_INFO(get_node()->get_logger(), "Cartesian velocity controller configured. Listening to /cmd_vel");
+  return controller_interface::CallbackReturn::SUCCESS;
 }
 
-CallbackReturn CartesianVelocityExampleController::on_activate(
+controller_interface::CallbackReturn CartesianVelocityExampleController::on_activate(
     const rclcpp_lifecycle::State& /*previous_state*/) {
   franka_cartesian_velocity_->assign_loaned_command_interfaces(command_interfaces_);
-  elapsed_time_ = rclcpp::Duration(0, 0);
-  return CallbackReturn::SUCCESS;
+  
+  // Réinitialisation des vitesses à l'activation
+  {
+    std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
+    current_linear_velocity_.setZero();
+    current_angular_velocity_.setZero();
+  }
+  
+  RCLCPP_INFO(get_node()->get_logger(), "Cartesian velocity controller activated");
+  return controller_interface::CallbackReturn::SUCCESS;
 }
 
 controller_interface::CallbackReturn CartesianVelocityExampleController::on_deactivate(
     const rclcpp_lifecycle::State& /*previous_state*/) {
   franka_cartesian_velocity_->release_interfaces();
-  return CallbackReturn::SUCCESS;
+  
+  // Arrêt du robot à la désactivation
+  {
+    std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
+    current_linear_velocity_.setZero();
+    current_angular_velocity_.setZero();
+  }
+  
+  RCLCPP_INFO(get_node()->get_logger(), "Cartesian velocity controller deactivated");
+  return controller_interface::CallbackReturn::SUCCESS;
 }
 
 }  // namespace franka_example_controllers
+
 #include "pluginlib/class_list_macros.hpp"
 // NOLINTNEXTLINE
 PLUGINLIB_EXPORT_CLASS(franka_example_controllers::CartesianVelocityExampleController,
