@@ -15,9 +15,12 @@
 #pragma once
 
 #include <string>
+#include <mutex>
 
 #include <controller_interface/controller_interface.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
+#include <Eigen/Eigen>
 
 #include <franka_semantic_components/franka_cartesian_velocity_interface.hpp>
 
@@ -45,12 +48,21 @@ class CartesianVelocityExampleController : public controller_interface::Controll
   std::unique_ptr<franka_semantic_components::FrankaCartesianVelocityInterface>
       franka_cartesian_velocity_;
 
-  const double k_time_max_{4.0};
-  const double k_v_max_{0.05};
-  const double k_angle_{M_PI / 4.0};
+  // Constantes pour la configuration
   const bool k_elbow_activated_{false};
 
-  rclcpp::Duration elapsed_time_ = rclcpp::Duration(0, 0);
+  // Subscriber pour /cmd_vel
+  rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr cmd_vel_subscriber_;
+  
+  // Callback pour les messages cmd_vel
+  void cmd_vel_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
+  
+  // Variables pour stocker les vitesses courantes
+  Eigen::Vector3d current_linear_velocity_;
+  Eigen::Vector3d current_angular_velocity_;
+  
+  // Mutex pour la synchronisation thread-safe
+  std::mutex cmd_vel_mutex_;
 };
 
 }  // namespace franka_example_controllers
