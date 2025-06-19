@@ -2,36 +2,24 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
-from tf2_msgs.msg import TFMessage
-from geometry_msgs.msg import PoseStamped
-from sensor_msgs.msg import JointState
 import time
-import math
 
 class GuideVirtuel(Node):
     def __init__(self):
         super().__init__('guide_virtuel')
 
-        # Création du subscriber pour la pose de l'effecteur du robot
-        self.position_effecteur_robot_sub = self.create_subscription(
-            TFMessage, 
-            '/position_effecteur_robot', 
-            self.position_effecteur_robot_callback, 
+        # Création d'un publisher pour la force du contrôleur
+        self.guide_force_pub = self.create_publisher(
+            Float32MultiArray,
+            '/force_guide',
             10
         )
-
+        
         # Création du subscriber pour la pose du contrôleur
         self.position_controleur_sub = self.create_subscription(
             Float32MultiArray, 
             '/valeur_effecteur', 
             self.position_controleur_sub_callback, 
-            10
-        )
-
-        # Création d'un publisher pour la force du contrôleur
-        self.guide_force_pub = self.create_publisher(
-            Float32MultiArray,
-            '/force_guide',
             10
         )
 
@@ -43,42 +31,13 @@ class GuideVirtuel(Node):
             10
         )
 
-        # Création du subscriber pour la position de l'objet
-        self.pose_sub = self.create_subscription(
-            PoseStamped,
-            '/fiole/pose',
-            self.pose_callback,
-            10
-        )
-
-        # Créer un subscriber pour l'état actuel des articulations
-        self.joint_state_sub = self.create_subscription(
-            JointState,
-            '/joint_states',
-            self.joint_state_callback,
-            10
-        )
-
-        # Création du subscriber pour la distance entre parroies et robot
-        self.distance_parroies_sub = self.create_subscription(
+        # Création du subscriber pour les distances robot-objet
+        self.distance_sub = self.create_subscription(
             Float32MultiArray,
-            '/distance_robot_parroies',
-            self.distance_parroies_callback,
+            '/distance_robot_objet',
+            self.distance_callback,
             10
         )
-
-        # Initialiser la position du robot
-        self.x = 0.0
-        self.y = 0.0
-        self.z = 0.0
-        self.qx = 0.0
-        self.qy = 0.0
-        self.qz = 0.0
-        self.qw = 1.0  # Quaternion d'identité (pas de rotation)
-        self.pince = 0.0
-
-        # État des articulations (pour la callback joint_state)
-        self.current_joint_positions = {}
 
         # Initialiser la position du contrôleur
         self.controleur_x = 0.0
@@ -96,38 +55,26 @@ class GuideVirtuel(Node):
         self.force_rx = 0.0
         self.force_ry = 0.0
         self.force_rz = 0.0
-
-        # Initialiser la position de l'objet
-        self.pose_objet_x = 0.0
-        self.pose_objet_y = 0.0
-        self.pose_objet_z = 0.0
-        self.pose_objet_qx = 0.0
-        self.pose_objet_qy = 0.0
-        self.pose_objet_qz = 0.0
-        self.pose_objet_qw = 0.0
         
-        # Initialiser les positions précédentes pour le calcul d'accélération
+        # Initialiser les distances robot-objet
+        self.distance_totale = 0.0
+        self.distance_x = 0.0
+        self.distance_y = 0.0
+        self.distance_z = 0.0
+        
+        # Initialiser les distances précédentes
         self.distance_x_prev = 0.0
         self.distance_y_prev = 0.0
         self.distance_z_prev = 0.0
 
-        # Initialiser les accélérations
-        self.accel_x = 0.0
-        self.accel_y = 0.0
-        self.accel_z = 0.0
+        # Variables pour le calcul de vitesse
+        self.previous_position = [0.0, 0.0, 0.0]  # [x, y, z] pour les translations uniquement
+        self.current_velocity = [0.0, 0.0, 0.0]   # [vx, vy, vz] pour les translations uniquement
+        self.previous_time = time.time()
+        self.controller_data_initialized = False
 
-        # Initialiser les distances entre les parroies et l'effecteur du robot
-        self.distance_parroies_x = 0.0
-        self.distance_parroies_y = 0.0
-        self.distance_parroies_z = 0.0
-
-        # Initialiser les force de répulsion des parroies
-        self.repulsion_parroies_x = 0.0
-        self.repulsion_parroies_y = 0.0
-        self.repulsion_parroies_z = 0.0
-
-        # Initialiser la distance de sécurité entre robot et parroies
-        self.distance_safe_parroies = 0.2
+        # Coefficients d'amortissement (inspiré de force_vitesse.py)
+        self.damping_coeff_translation = 2.0  # N·s/m
         
         # Variables pour le calcul du dt réel
         self.last_time = time.time()
@@ -135,16 +82,12 @@ class GuideVirtuel(Node):
         
         # Timeout pour considérer les données du contrôleur comme obsolètes (en secondes)
         self.controller_data_timeout = 0.5
-
-        # Initialiser la masse
-        self.masse = 1.0
-        self.masse_obj = 0.0
         
         # Initialiser les flags de contrôle
-        self.robot_pose_received_ = False
-        self.controller_pose_received_ = False
-        self.controller_data_initialized_ = False  # Pour savoir si on a reçu au moins une donnée
-        self.in_pose_mode_ = True  # Par défaut, on est en mode position
+        self.distance_received = False
+        self.controller_pose_received = False
+        self.in_pose_mode = True  # Par défaut, on est en mode position
+        self.guide_active = False # Par défaut, il n'y a pas de guide
         
         # Compteur pour les messages de debug
         self.count = 0
@@ -153,38 +96,14 @@ class GuideVirtuel(Node):
         self.timer = self.create_timer(0.1, self.send_force)  # Appel à 10Hz
         
         self.get_logger().info('Nœud de création de guide virtuel démarré')
-
-    # Callback pour recevoir la position de l'effecteur du robot
-    def position_effecteur_robot_callback(self, msg):
-        """Callback pour recevoir la position de l'effecteur du robot"""
-        if len(msg.transforms) == 0:
-            self.get_logger().error("Message de position robot reçu est vide (aucune transformation)")
-            return
-            
-        # Récupérer la première transformation du message
-        transform = msg.transforms[0]
-        
-        # Mettre à jour la position du robot
-        self.x = float(transform.transform.translation.x)
-        self.y = float(transform.transform.translation.y)
-        self.z = float(transform.transform.translation.z)
-        self.qx = float(transform.transform.rotation.x)
-        self.qy = float(transform.transform.rotation.y)
-        self.qz = float(transform.transform.rotation.z)
-        self.qw = float(transform.transform.rotation.w)
-        
-        self.robot_pose_received_ = True
-        
-        self.get_logger().debug(f"Position robot reçue: [{self.x}, {self.y}, {self.z}] " +
-                                f"[{self.qx}, {self.qy}, {self.qz}, {self.qw}]")
         
     # Callback pour recevoir la position du contrôleur
     def position_controleur_sub_callback(self, msg):
         """Callback pour recevoir la position du contrôleur"""
 
-        # Vérifier que le message contient assez de données (au moins 6 pour les vitesses cartésiennes)
-        if len(msg.data) < 6:
-            self.get_logger().error(f"Message valeur_effecteur invalide: attendu au moins 6 valeurs, reçu {len(msg.data)}")
+        # Vérifier que le message contient assez de données (au moins 7 pour x,y,z,qx,qy,qz,qw)
+        if len(msg.data) < 7:
+            self.get_logger().error(f"Message valeur_effecteur invalide: attendu au moins 7 valeurs, reçu {len(msg.data)}")
             return
         
         # Mettre à jour la position du contrôleur
@@ -194,174 +113,90 @@ class GuideVirtuel(Node):
         self.controleur_qx = float(msg.data[3])
         self.controleur_qy = float(msg.data[4])
         self.controleur_qz = float(msg.data[5])
-        if len(msg.data) > 6:
-            self.controleur_qw = float(msg.data[6])
-        
-        # Marquer que des données du contrôleur ont été reçues
-        self.controller_pose_received_ = True
-        self.controller_data_initialized_ = True
-        self.last_controller_update_time = time.time()
-        
-        self.get_logger().debug(f"Position contrôleur reçue: [{self.controleur_x}, {self.controleur_y}, {self.controleur_z}] " +
-                                f"[{self.controleur_qx}, {self.controleur_qy}, {self.controleur_qz}, {self.controleur_qw}]")
+        self.controleur_qw = float(msg.data[6])
 
-    def joint_state_callback(self, msg):
-        """Callback pour recevoir l'état actuel des articulations"""
-        # Mettre à jour l'état actuel des articulations
-        for i, name in enumerate(msg.name):
-            if i < len(msg.position):
-                self.current_joint_positions[name] = msg.position[i]
-                
-                # Si une des articulations correspond à la pince, la mettre à jour
-                if 'fr3_finger_joint1' in name.lower() or 'fr3_finger_joint2' in name.lower():
-                    self.pince = abs(msg.position[i])  # Valeur absolue de l'ouverture de la pince
+        # Calculer la vitesse
+        self.calculate_velocity()
+        
+        self.controller_pose_received = True
+        self.controller_data_initialized = True
+        self.last_controller_update_time = time.time()
+
+        self.get_logger().debug(f"Position contrôleur reçue: [{self.controleur_x}, {self.controleur_y}, {self.controleur_z}] " +
+                               f"[{self.controleur_qx}, {self.controleur_qy}, {self.controleur_qz}, {self.controleur_qw}]")
 
     # Callback pour recevoir le mode (position/vitesse)
     def mode_callback(self, msg):
         """Callback pour recevoir le mode actuel"""
-        if len(msg.data) < 2:
-            self.get_logger().error(f"Message Mode_Pose_Vitesse invalide: attendu au moins 2 valeurs, reçu {len(msg.data)}")
+        if len(msg.data) < 5:
+            self.get_logger().error(f"Message Mode_Pose_Vitesse invalide: attendu au moins 5 valeurs, reçu {len(msg.data)}")
             return
             
-        # Mode Position = [1.0, 0.0, x, y], Mode Vitesse = [0.0, 1.0, x, y]
-        self.in_pose_mode_ = bool(msg.data[0])  # 1.0 si en mode position
+        # Mode Position et guide = [1.0, 0.0, x, y, 1.0], Mode Vitesse et pas de guide = [0.0, 1.0, x, y, 0.0]
+        self.in_pose_mode = bool(msg.data[0])  # 1.0 si en mode position
+        self.guide_active = bool(msg.data[4])  # 1.0 si il y a les guides
         
-        self.get_logger().debug(f"Mode mis à jour: {'Position' if self.in_pose_mode_ else 'Vitesse'}")
+        self.get_logger().debug(f"Mode mis à jour: {'Position avec guide' if (self.in_pose_mode and self.guide_active) else 'Autre mode'}")
 
-    # Callback pour recevoir la distance entre les parroies et le robot
-    def distance_parroies_callback(self, msg):
-        """Callback pour recevoir la distance entre les parroies et le robot"""
-        if len(msg.data) < 3:
-            self.get_logger().error(f"Message Mode_Pose_Vitesse invalide: attendu au moins 3 valeurs, reçu {len(msg.data)}")
+    # Callback pour recevoir les distances robot-objet
+    def distance_callback(self, msg):
+        """Callback pour recevoir les distances entre robot et objet"""
+        if len(msg.data) < 4:
+            self.get_logger().error(f"Message distance_robot_objet invalide: attendu 4 valeurs, reçu {len(msg.data)}")
             return
-            
-        self.distance_parroies_x = (msg.data[0])
-        self.distance_parroies_y = (msg.data[1])
-        self.distance_parroies_z = (msg.data[2])
-
-        if self.distance_parroies_x < self.distance_safe_parroies and self.controleur_x > 0.25:
-            self.repulsion_parroies_x = - 1.0
-        elif self.distance_parroies_x < self.distance_safe_parroies and self.controleur_x < 0.25:
-            self.repulsion_parroies_x = 1.0
-        else :
-            self.repulsion_parroies_x = 0.0
-
-        if self.distance_parroies_y < self.distance_safe_parroies and self.controleur_z > 0.05:
-            self.repulsion_parroies_z = - 1.0
-        elif self.distance_parroies_y < self.distance_safe_parroies and self.controleur_z < 0.05:
-            self.repulsion_parroies_z = 1.0
-        else :
-            self.repulsion_parroies_z = 0.0
-
-        if self.distance_parroies_z < self.distance_safe_parroies and self.controleur_y > -0.02:
-            self.repulsion_parroies_y = - 1.0
-        elif self.distance_parroies_z < self.distance_safe_parroies and self.controleur_y < -0.02:
-            self.repulsion_parroies_y = 1.0
-        else :
-            self.repulsion_parroies_y = 0.0
         
-        self.get_logger().debug(f"Distances publiées: suivant x: {self.distance_parroies_x} suivant y: {self.distance_parroies_y} suivant z: {self.distance_parroies_z}")
-        self.get_logger().debug(f"Force de répulsion: suivant x: {self.repulsion_parroies_x} suivant y: {self.repulsion_parroies_y} suivant z: {self.repulsion_parroies_z}")
-
-    # Callback pour recevoir la position de l'objet
-    def pose_callback(self, msg):
-        """Callback pour recevoir la position de l'objet"""
-        # Extraire la position de l'objet du message
-        self.pose_objet_x = float(msg.pose.position.x)
-        self.pose_objet_y = float(msg.pose.position.y)
-        self.pose_objet_z = float(msg.pose.position.z)
+        # Format du message: [distance_totale, dx, dy, dz]
+        self.distance_totale = float(msg.data[0])
+        self.distance_x = float(msg.data[1])  # dx = x_robot - x_objet
+        self.distance_y = float(msg.data[2])  # dy = y_robot - y_objet
+        self.distance_z = float(msg.data[3])  # dz = z_robot - z_objet
         
-        # Extraire l'orientation (quaternion) et la convertir en angles d'Euler (simplification)
-        # Pour une utilisation complète, il faudrait utiliser des fonctions de conversion quaternion -> Euler
-        self.pose_objet_qx = float(msg.pose.orientation.x)
-        self.pose_objet_qy = float(msg.pose.orientation.y)
-        self.pose_objet_qz = float(msg.pose.orientation.z)
-        self.pose_objet_qw = float(msg.pose.orientation.w)
+        self.distance_received = True
         
-        self.get_logger().debug(f"Position objet reçue: [{self.pose_objet_x}, {self.pose_objet_y}, {self.pose_objet_z}] " +
-                            f"Orientation: [{self.pose_objet_qx}, {self.pose_objet_qy}, {self.pose_objet_qz}, {self.pose_objet_qw}]")
-
-    def calcul_distance(self):
-        distance = math.sqrt( (self.x - self.pose_objet_x)**2 + (self.y - self.pose_objet_y)**2 + (self.z - self.pose_objet_z)**2)
-        if distance < 0.1 and self.pince <= 0.02:
-            self.masse_obj = 0.2
-
-    def calcul_accel(self):
-        """
-        Calcule l'accélération basée sur les positions actuelles et précédentes.
-        Cette fonction est maintenant appelée dans send_force() pour garantir un calcul systématique.
-        """
+        self.get_logger().debug(f"Distances reçues: totale={self.distance_totale:.3f}, " +
+                               f"dx={self.distance_x:.3f}, dy={self.distance_y:.3f}, dz={self.distance_z:.3f}")
+        
+    def calculate_velocity(self):
+        """Calcule la vitesse basée sur les positions actuelles et précédentes"""
         current_time = time.time()
         
-        # Vérifier si les données du contrôleur sont trop anciennes
-        if not self.controller_data_initialized_ or (current_time - self.last_controller_update_time) > self.controller_data_timeout:
-            # Données obsolètes ou inexistantes, mettre l'accélération à zéro
-            self.accel_x = 0.0
-            self.accel_y = 0.0
-            self.accel_z = 0.0
-            if self.count % 100 == 0:  # Log périodiquement
-                self.get_logger().debug("Données du contrôleur obsolètes ou manquantes - Accélération mise à zéro")
-            return self.accel_x, self.accel_y, self.accel_z
+        # Calculer dt
+        dt = current_time - self.previous_time
         
-        # Calculer le dt réel depuis le dernier calcul
-        dt = current_time - self.last_time
-        self.last_time = current_time
+        if dt < 0.001:  # Éviter la division par zéro
+            return
+            
+        # Si c'est la première fois, initialiser les positions précédentes
+        if not self.controller_data_initialized:
+            self.previous_position = [
+                self.controleur_x, self.controleur_y, self.controleur_z
+            ]
+            self.previous_time = current_time
+            return
         
-        # Éviter les dt trop petits ou trop grands qui pourraient causer des problèmes
-        if dt < 0.001:  # Moins de 1ms
-            dt = 0.001
-        elif dt > 1.0:  # Plus de 1 seconde
-            dt = 1.0
+        # Calculer les vitesses pour les 3 axes de translation
+        current_cartesian = [
+            self.controleur_x, self.controleur_y, self.controleur_z
+        ]
         
-        # Calculer les déplacements (différence entre position actuelle et position précédente)
-        delta_x = self.controleur_x - self.distance_x_prev
-        delta_y = self.controleur_y - self.distance_y_prev
-        delta_z = self.controleur_z - self.distance_z_prev
-
-        # Calculer les accélérations seulement si le déplacement est significatif
-        if abs(delta_x) > 0.001 or abs(delta_y) > 0.001 or abs(delta_z) > 0.001:
-            self.accel_x = delta_x / (dt**2)
-            self.accel_y = delta_y / (dt**2)
-            self.accel_z = delta_z / (dt**2)
-        else:
-            # Si le contrôleur est stationnaire (ou presque), l'accélération est nulle
-            self.accel_x = 0.0
-            self.accel_y = 0.0
-            self.accel_z = 0.0
-
-        # Limiter les accélérations
-        if self.accel_x > 3:
-            self.accel_x = 3.0
-        elif self.accel_x < -3:
-            self.accel_x = -3
-
-        if self.accel_y > 3:
-            self.accel_y = 3.0
-        elif self.accel_y < -3:
-            self.accel_y = -3
-
-        if self.accel_z > 3:
-            self.accel_z = 3.0
-        elif self.accel_z < -3:
-            self.accel_z = -3
+        for i in range(3):
+            self.current_velocity[i] = (current_cartesian[i] - self.previous_position[i]) / dt
         
         # Mettre à jour les positions précédentes
-        self.distance_x_prev = self.controleur_x
-        self.distance_y_prev = self.controleur_y
-        self.distance_z_prev = self.controleur_z
-
-        # Afficher l'information d'accélération périodiquement
-        if self.count % 100 == 0:
-            self.get_logger().debug(f"dt: {dt:.3f}s - Accélération suivant x: {self.accel_x:.2f}  y: {self.accel_y:.2f}  z: {self.accel_z:.2f}")
+        self.previous_position = current_cartesian.copy()
+        self.previous_time = current_time
         
-        return self.accel_x, self.accel_y, self.accel_z        
+        # Debug périodique
+        if self.count % 100 == 0:
+            self.get_logger().debug(f"Vitesses - Trans: [{self.current_velocity[0]:.3f}, {self.current_velocity[1]:.3f}, {self.current_velocity[2]:.3f}]")
 
     def send_force(self):
         """
-        Calcule l'accélération puis applique la formule F = m*a pour générer les forces.
-        Cette fonction est appelée périodiquement par le timer à 10Hz.
+        Calcule la distance entre l'effecteur du robot et l'objet, puis applique une force
+        proportionnelle à la distance pour guider vers l'objet + amortissement.
+        Les forces sont envoyées uniquement en mode position avec guide actif.
         """
-        if not self.robot_pose_received_:
+        if not self.distance_received or not self.controller_pose_received:
             return
             
         # Incrémenter le compteur pour affichage périodique
@@ -369,51 +204,92 @@ class GuideVirtuel(Node):
         
         # Initialiser les forces à zéro
         force_msg = Float32MultiArray()
-        force_msg.data = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Zéro pour toutes les forces
+        force_msg.data = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         
-        # Si on n'est pas en mode position, envoyer des forces nulles et quitter
-        if not self.in_pose_mode_:
-            # Envoyer le message de force (toutes à zéro)
+        # Si on n'est pas en mode position avec guide actif, envoyer des forces nulles
+        if not (self.in_pose_mode and self.guide_active):
             self.guide_force_pub.publish(force_msg)
             
-            # Afficher l'état du mode tous les 100 cycles (environ 10 secondes à 10Hz)
             if self.count % 100 == 0:
-                self.get_logger().debug("Mode Vitesse: Aucune force appliquée par guide_virtuel")
+                self.get_logger().debug(f"Mode: Pose={self.in_pose_mode}, Guide={self.guide_active} - Aucune force appliquée")
             
             return
         
-        # CALCULER L'ACCÉLÉRATION À CHAQUE CYCLE
-        self.calcul_accel()
-
-        # Calculer la distance et mettre à jour la masse de l'objet
-        self.calcul_distance()
+        # Vérifier si les données du contrôleur sont trop anciennes
+        current_time = time.time()
+        if not self.controller_data_initialized or (current_time - self.last_controller_update_time) > self.controller_data_timeout:
+            # Données obsolètes, ne pas calculer de forces
+            self.guide_force_pub.publish(force_msg)
+            
+            if self.count % 100 == 0:
+                self.get_logger().debug("Données du contrôleur obsolètes - Forces de guide mises à zéro")
+            return
         
-        # Réinitialiser les forces
-        self.force_x = 0.0
-        self.force_y = 0.0
-        self.force_z = 0.0
+        # Initialiser les forces
+        forces = [0.0, 0.0, 0.0]  # [fx, fy, fz]
+        distances = [self.distance_x, self.distance_y, self.distance_z]
+        
+        # Seuil de distance en dessous duquel on n'applique pas de force (zone morte)
+        seuil_distance = 0.1  # 10cm
+        
+        # Facteur de proportionnalité pour les forces de guidage
+        k_force = 3.0  # Ajustez selon vos besoins
+        
+        # Force maximale
+        force_max = 2.0
+        
+        # Calculer les forces pour chaque axe
+        for axis in range(3):  # 3 axes de translation
+            # FORCE DE GUIDAGE (proportionnelle à la distance)
+            guidage_force = 0.0
+            if abs(distances[axis]) > seuil_distance:
+                # Force négative pour aller vers l'objet (distance = robot - objet)
+                guidage_force = - ( k_force * distances[axis] + 1.5)
+            
+            # FORCE D'AMORTISSEMENT (opposée à la vitesse)
+            damping_force = -self.damping_coeff_translation * self.current_velocity[axis]
+            
+            # FORCE TOTALE: Guidage + Amortissement
+            total_force = guidage_force + damping_force
+            
+            # Limiter la force totale
+            total_force = max(-force_max, min(force_max, total_force))
+            
+            forces[axis] = total_force
+        
+        # Ajustement selon la position du contrôleur
+        if (self.controleur_x - 0.25) > 0:
+            forces[0] = -forces[0]
+            
+        if (self.controleur_y + 0.02) > 0:
+            forces[1] = -forces[1]
+            
+        if (self.controleur_z - 0.05) > 0:
+            forces[2] = -forces[2]
+        
+        # Assigner les forces calculées
+        self.force_x = forces[0]
+        self.force_y = forces[1]
+        self.force_z = forces[2]
+        
+        # Pas de forces rotationnelles pour l'instant
         self.force_rx = 0.0
         self.force_ry = 0.0
         self.force_rz = 0.0
         
-        # Calcul de la force F = m*a
-        self.force_x = - (self.masse + self.masse_obj) * self.accel_x + self.repulsion_parroies_x
-        self.force_y = - (self.masse + self.masse_obj) * self.accel_y + self.repulsion_parroies_y
-        self.force_z = - (self.masse + self.masse_obj) * self.accel_z + self.repulsion_parroies_z
-        
-        # Pour l'instant on ne prend pas en compte la rotation
-        self.force_rx = 0.0
-        self.force_ry = 0.0
-        self.force_rz = 0.0
-
         # Créer et envoyer le message de force
-        force_msg = Float32MultiArray()
         force_msg.data = [self.force_x, self.force_y, self.force_z, self.force_rx, self.force_ry, self.force_rz]
         self.guide_force_pub.publish(force_msg)
         
-        # Afficher les forces périodiquement (tous les cycles dans votre version originale)
+        # Affichage périodique des informations
+        if self.count % 10 == 0:
+            self.get_logger().info(f"Distance totale: {self.distance_totale:.3f}m - " +
+                                  f"Forces appliquées: [{self.force_x:.3f}, {self.force_y:.3f}, {self.force_z:.3f}]")
+            
+        # Debug détaillé moins fréquent
         if self.count % 100 == 0:
-            self.get_logger().debug(f"Mode Position - Force envoyée: [{self.force_x:.3f}, {self.force_z:.3f}, {self.force_y:.3f}]")
+            self.get_logger().debug(f"Vitesses: [{self.current_velocity[0]:.3f}, {self.current_velocity[1]:.3f}, {self.current_velocity[2]:.3f}] m/s")
+            self.get_logger().debug(f"Distances: [{distances[0]:.3f}, {distances[1]:.3f}, {distances[2]:.3f}] m")
 
 def main(args=None):
     rclpy.init(args=args)
