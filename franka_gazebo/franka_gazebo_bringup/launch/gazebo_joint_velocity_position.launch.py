@@ -151,19 +151,6 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Charger les contrôleurs cartésiens en état inactif
-    cartesian_velocity_example_controller = ExecuteProcess(
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'inactive',
-                'cartesian_velocity_example_controller'],
-        output='screen'
-    )
-
-    cartesian_pose_example_controller = ExecuteProcess(
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'inactive',
-                'cartesian_pose_example_controller'],
-        output='screen'
-    )
-
     # Nœud pour lancer le solveur IK
     ik_solver_node = Node(
         package='franka_teleop',      # Nom du package contenant le script
@@ -229,6 +216,14 @@ def generate_launch_description():
         output='screen'                 # Afficher la sortie à l'écran
     )
 
+    # Nœud pour connaitre la distance entre l'objet et l'effecteur du robot
+    distance_objet_node = Node(
+        package='franka_teleop',        # Nom du package contenant le script
+        executable='distance_objet',               # Nom de l'exécutable
+        name='distance_objet_node',                # Nom du nœud
+        output='screen'                 # Afficher la sortie à l'écran
+    )
+
     # Nœud pour lancer guide_virtuel
     guide_virtuel_node = Node(
         package='franka_teleop',        # Nom du package contenant le script
@@ -273,12 +268,7 @@ def generate_launch_description():
                 on_exit=[joint_velocity_example_controller],
             )
         ),
-        RegisterEventHandler(
-            event_handler=OnProcessExit(
-                target_action=load_joint_state_broadcaster,
-                on_exit=[cartesian_velocity_example_controller],
-            )
-        ),
+        
         Node(
             package='joint_state_publisher',
             executable='joint_state_publisher',
@@ -291,9 +281,10 @@ def generate_launch_description():
         ig_solver_node,
         mgd_node,
         controller_switcher_node,
+        fiole_pose_monitor,
+        distance_objet_node,
         force_position_node,
         force_vitesse_node,
-        fiole_pose_monitor,
         distance_parois_node,
         guide_virtuel_node,
     ])
