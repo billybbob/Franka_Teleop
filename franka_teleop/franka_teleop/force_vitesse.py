@@ -2,8 +2,6 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
-from geometry_msgs.msg import PoseStamped
-from tf2_msgs.msg import TFMessage
 from sensor_msgs.msg import JointState
 import math
 import time
@@ -26,14 +24,6 @@ class Joystick(Node):
             self.position_controleur_sub_callback, 
             10
         )
-
-        # Création du subscriber pour la pose de l'effecteur du robot
-        self.position_effecteur_robot_sub = self.create_subscription(
-            TFMessage, 
-            '/position_effecteur_robot', 
-            self.position_effecteur_robot_callback, 
-            10
-        )
         
         # Création du subscriber pour le mode (position/vitesse)
         self.mode_sub = self.create_subscription(
@@ -43,27 +33,19 @@ class Joystick(Node):
             10
         )
 
+        # Création du subscriber pour connaitre la distance entre le robot et l'objet
+        self.distance_obj_sub= self.create_subscription(
+            Float32MultiArray,
+            '/distance_robot_objet',
+            self.distance_obj_callback,
+            10
+        )
+
         # Créer un subscriber pour l'état actuel des articulations
         self.joint_state_sub = self.create_subscription(
             JointState,
             '/joint_states',
             self.joint_state_callback,
-            10
-        )
-
-        # Création du subscriber pour la position de l'objet
-        self.pose_sub = self.create_subscription(
-            PoseStamped,
-            '/fiole/pose',
-            self.pose_callback,
-            10
-        )
-
-        # Création du subscriber pour la distance entre parroies et robot
-        self.distance_parroies_sub = self.create_subscription(
-            Float32MultiArray,
-            '/distance_robot_parroies',
-            self.distance_parroies_callback,
             10
         )
 
@@ -76,24 +58,11 @@ class Joystick(Node):
         self.controleur_qz = 0.0
         self.controleur_qw = 1.0  # Quaternion d'identité (pas de rotation)
 
-        # Initialiser la position de l'objet
-        self.pose_objet_x = 0.0
-        self.pose_objet_y = 0.0
-        self.pose_objet_z = 0.0
-        self.pose_objet_qx = 0.0
-        self.pose_objet_qy = 0.0
-        self.pose_objet_qz = 0.0
-        self.pose_objet_qw = 0.0
-
         # Initialiser la position du robot
-        self.x = 0.0
-        self.y = 0.0
-        self.z = 0.0
-        self.qx = 0.0
-        self.qy = 0.0
-        self.qz = 0.0
-        self.qw = 1.0  # Quaternion d'identité (pas de rotation)
         self.pince = 0.0
+
+        # Initialiser la position de l'objet
+        self.distance_objet = 0.0
 
         # État des articulations (pour la callback joint_state)
         self.current_joint_positions = {}
@@ -121,18 +90,22 @@ class Joystick(Node):
         self.accel_y = 0.0
         self.accel_z = 0.0
 
-        # Initialiser les distances entre les parroies et l'effecteur du robot
-        self.distance_parroies_x = 0.0
-        self.distance_parroies_y = 0.0
-        self.distance_parroies_z = 0.0
+        # Timeout pour considérer les données du contrôleur comme obsolètes (en secondes)
+        self.controller_data_timeout = 0.5
 
-        # Initialiser les force de répulsion des parroies
-        self.repulsion_parroies_x = 0.0
-        self.repulsion_parroies_y = 0.0
-        self.repulsion_parroies_z = 0.0
+        # Initialiser la masse
+        self.masse = 1.0
+        self.masse_obj = 0.0
 
-        # Initialiser la distance de sécurité entre robot et parroies
-        self.distance_safe_parroies = 0.2
+        # Variables pour le calcul de vitesse
+        self.previous_position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # [x, y, z, roll, pitch, yaw]
+        self.current_velocity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.previous_time = time.time()
+        self.controller_data_initialized = False
+
+        # Coefficients d'amortissement
+        self.damping_coeff_translation = 2.0  # N·s/m
+        self.damping_coeff_rotation = 0.05     # Nm·s/rad
         
         # Variables pour le calcul du dt réel
         self.last_time = time.time()
@@ -140,15 +113,10 @@ class Joystick(Node):
         
         # Timeout pour considérer les données du contrôleur comme obsolètes (en secondes)
         self.controller_data_timeout = 0.5
-
-        # Initialiser la masse
-        self.masse = 1.0
-        self.masse_obj = 0.0
         
         # Initialiser les flags de contrôle
         self.controller_pose_received = False
         self.in_speed_mode = False  # Par défaut, on est en mode position
-        self.scale_factor = 1.0     # Facteur d'échelle
         
         # Définir les limites pour le retour de force
         # Structure: [seuil_inférieur, seuil_supérieur, limite_max, limite_min]
@@ -156,14 +124,14 @@ class Joystick(Node):
             [0.22, 0.28, 0.37, 0.13],           # Axe X translation
             [-0.05, 0.01, 0.23, -0.27],         # Axe Y translation
             [0.01, 0.07, 0.19, -0.1],           # Axe Z translation
-            [-0.2, 0.2, 0.8, -0.8],             # Rotation autour de l'axe x (Roll) en radians
-            [0.4, 0.8, 1.5, -0.3],              # Rotation autour de l'axe y (Pitch) en radians
-            [-0.225, 0.225, 0.9, -0.9],         # Rotation autour de l'axe z (Yaw) en radians
+            [-0.2, 0.2, 1.6, -1.6],             # Rotation autour de l'axe x (Roll) en radians
+            [1.0, 1.3, 1.4, 0.6],              # Rotation autour de l'axe y (Pitch) en radians
+            [-0.3, 0.3, 2, -2],         # Rotation autour de l'axe z (Yaw) en radians
         ]
         
         # Définir les constantes de force
         self.max_force_by_axis = [3.0, 3.0, 3.0]      # Force maximale en translation (N)
-        self.max_torque_by_axis = [0.1, 0.1, 0.1]     # Couple maximum en rotation (Nm)
+        self.max_torque_by_axis = [0.15, 0.2, 0.075]     # Couple maximum en rotation (Nm)
         self.stiffness_rotation = 4.0               # Coefficient de raideur en rotation
         
         # Compteur pour les messages de debug
@@ -183,9 +151,21 @@ class Joystick(Node):
             
         # Mode Position = [1.0, 0.0, x, y], Mode Vitesse = [0.0, 1.0, x, y]
         self.in_speed_mode = bool(msg.data[1])  # 1.0 si en mode vitesse
-        self.scale_factor = float(msg.data[3])
         
-        self.get_logger().debug(f"Mode mis à jour: {'Vitesse' if self.in_speed_mode else 'Position'}, Scale: {self.scale_factor}")
+        self.get_logger().debug(f"Mode mis à jour: {'Vitesse' if self.in_speed_mode else 'Position'}")
+
+    # Callback pour recevoir la distance entre le robot et l'objet
+    def distance_obj_callback(self, msg):
+        """Callback pour recevoir la distance entre le robot et l'objet"""
+        if len(msg.data) < 4:
+            self.get_logger().error(f"Message distance_robot_objet invalide: attendu au moins 4 valeurs, reçu {len(msg.data)}")
+            return
+
+        self.distance_objet = (msg.data[0])
+        self.get_logger().debug(f"Distance entre le robot et l'objet : {self.distance_objet}")
+
+        if self.distance_objet < 0.1 and self.pince <= 0.02:
+            self.masse_obj = 0.2
         
     # Callback pour recevoir la position du contrôleur
     def position_controleur_sub_callback(self, msg):
@@ -204,43 +184,31 @@ class Joystick(Node):
         self.controleur_qy = float(msg.data[4])
         self.controleur_qz = float(msg.data[5])
         self.controleur_qw = float(msg.data[6])
+
+        # Rotation de 22.5° autour de Y
+        angle = math.pi / 8
+        q_rot = (math.cos(angle/2), 0, math.sin(angle/2), 0)
+
+        # Appliquer la rotation
+        q_orig = (self.controleur_qw, self.controleur_qx, self.controleur_qy, self.controleur_qz)
+        self.controleur_qw, self.controleur_qx, self.controleur_qy, self.controleur_qz = self.quaternion_multiply(q_orig, q_rot)
         
         # Convertir le quaternion en angles d'Euler
         self.euler_x, self.euler_y, self.euler_z = self.quaternion_to_euler(
             self.controleur_qx, self.controleur_qy, self.controleur_qz, self.controleur_qw
         )
         
+        # Calculer la vitesse
+        self.calculate_velocity()
+        
         self.controller_pose_received = True
+        self.controller_data_initialized = True
         self.last_controller_update_time = time.time()
 
         self.get_logger().debug(f"Position contrôleur reçue: [{self.controleur_x}, {self.controleur_y}, {self.controleur_z}] " +
                                f"[{self.controleur_qx}, {self.controleur_qy}, {self.controleur_qz}, {self.controleur_qw}]")
         self.get_logger().debug(f"Angles d'Euler correspondants: [Roll={math.degrees(self.euler_x):.2f}°, " +
                                f"Pitch={math.degrees(self.euler_y):.2f}°, Yaw={math.degrees(self.euler_z):.2f}°]")
-
-    # Callback pour recevoir la position de l'effecteur du robot
-    def position_effecteur_robot_callback(self, msg):
-        """Callback pour recevoir la position de l'effecteur du robot"""
-        if len(msg.transforms) == 0:
-            self.get_logger().error("Message de position robot reçu est vide (aucune transformation)")
-            return
-            
-        # Récupérer la première transformation du message
-        transform = msg.transforms[0]
-        
-        # Mettre à jour la position du robot
-        self.x = float(transform.transform.translation.x)
-        self.y = float(transform.transform.translation.y)
-        self.z = float(transform.transform.translation.z)
-        self.qx = float(transform.transform.rotation.x)
-        self.qy = float(transform.transform.rotation.y)
-        self.qz = float(transform.transform.rotation.z)
-        self.qw = float(transform.transform.rotation.w)
-        
-        self.robot_pose_received_ = True
-        
-        self.get_logger().debug(f"Position robot reçue: [{self.x}, {self.y}, {self.z}] " +
-                                f"[{self.qx}, {self.qy}, {self.qz}, {self.qw}]")
 
     def joint_state_callback(self, msg):
         """Callback pour recevoir l'état actuel des articulations"""
@@ -253,63 +221,42 @@ class Joystick(Node):
                 if 'fr3_finger_joint1' in name.lower() or 'fr3_finger_joint2' in name.lower():
                     self.pince = abs(msg.position[i])  # Valeur absolue de l'ouverture de la pince
 
-    # Callback pour recevoir la position de l'objet
-    def pose_callback(self, msg):
-        """Callback pour recevoir la position de l'objet"""
-        # Extraire la position de l'objet du message
-        self.pose_objet_x = float(msg.pose.position.x)
-        self.pose_objet_y = float(msg.pose.position.y)
-        self.pose_objet_z = float(msg.pose.position.z)
+    def calculate_velocity(self):
+        """Calcule la vitesse basée sur les positions actuelles et précédentes"""
+        current_time = time.time()
         
-        # Extraire l'orientation (quaternion) et la convertir en angles d'Euler (simplification)
-        # Pour une utilisation complète, il faudrait utiliser des fonctions de conversion quaternion -> Euler
-        self.pose_objet_qx = float(msg.pose.orientation.x)
-        self.pose_objet_qy = float(msg.pose.orientation.y)
-        self.pose_objet_qz = float(msg.pose.orientation.z)
-        self.pose_objet_qw = float(msg.pose.orientation.w)
+        # Calculer dt
+        dt = current_time - self.previous_time
         
-        self.get_logger().debug(f"Position objet reçue: [{self.pose_objet_x}, {self.pose_objet_y}, {self.pose_objet_z}] " +
-                            f"Orientation: [{self.pose_objet_qx}, {self.pose_objet_qy}, {self.pose_objet_qz}, {self.pose_objet_qw}]")
-
-    # Callback pour recevoir la distance entre les parroies et le robot
-    def distance_parroies_callback(self, msg):
-        """Callback pour recevoir la distance entre les parroies et le robot"""
-        if len(msg.data) < 3:
-            self.get_logger().error(f"Message Mode_Pose_Vitesse invalide: attendu au moins 3 valeurs, reçu {len(msg.data)}")
+        if dt < 0.001:  # Éviter la division par zéro
             return
             
-        self.distance_parroies_x = (msg.data[0])
-        self.distance_parroies_y = (msg.data[1])
-        self.distance_parroies_z = (msg.data[2])
-
-        if self.distance_parroies_x < self.distance_safe_parroies and self.controleur_x > 0.25:
-            self.repulsion_parroies_x = - 1.0
-        elif self.distance_parroies_x < self.distance_safe_parroies and self.controleur_x < 0.25:
-            self.repulsion_parroies_x = 1.0
-        else :
-            self.repulsion_parroies_x = 0.0
-
-        if self.distance_parroies_y < self.distance_safe_parroies and self.controleur_z > 0.05:
-            self.repulsion_parroies_z = - 1.0
-        elif self.distance_parroies_y < self.distance_safe_parroies and self.controleur_z < 0.05:
-            self.repulsion_parroies_z = 1.0
-        else :
-            self.repulsion_parroies_z = 0.0
-
-        if self.distance_parroies_z < self.distance_safe_parroies and self.controleur_y > -0.02:
-            self.repulsion_parroies_y = - 1.0
-        elif self.distance_parroies_z < self.distance_safe_parroies and self.controleur_y < -0.02:
-            self.repulsion_parroies_y = 1.0
-        else :
-            self.repulsion_parroies_y = 0.0
+        # Si c'est la première fois, initialiser les positions précédentes
+        if not self.controller_data_initialized:
+            self.previous_position = [
+                self.controleur_x, self.controleur_y, self.controleur_z,
+                self.euler_x, self.euler_y, self.euler_z
+            ]
+            self.previous_time = current_time
+            return
         
-        self.get_logger().debug(f"Distances publiées: suivant x: {self.distance_parroies_x} suivant y: {self.distance_parroies_y} suivant z: {self.distance_parroies_z}")
-        self.get_logger().debug(f"Force de répulsion: suivant x: {self.repulsion_parroies_x} suivant y: {self.repulsion_parroies_y} suivant z: {self.repulsion_parroies_z}")
-
-    def calcul_distance(self):
-        distance = math.sqrt( (self.x - self.pose_objet_x)**2 + (self.y - self.pose_objet_y)**2 + (self.z - self.pose_objet_z)**2)
-        if distance < 0.1 and self.pince <= 0.02:
-            self.masse_obj = 0.2
+        # Calculer les vitesses pour tous les axes
+        current_cartesian = [
+            self.controleur_x, self.controleur_y, self.controleur_z,
+            self.euler_x, self.euler_y, self.euler_z
+        ]
+        
+        for i in range(6):
+            self.current_velocity[i] = (current_cartesian[i] - self.previous_position[i]) / dt
+        
+        # Mettre à jour les positions précédentes
+        self.previous_position = current_cartesian.copy()
+        self.previous_time = current_time
+        
+        # Debug périodique
+        if self.count % 100 == 0:
+            self.get_logger().debug(f"Vitesses - Trans: [{self.current_velocity[0]:.3f}, {self.current_velocity[1]:.3f}, {self.current_velocity[2]:.3f}] " +
+                                  f"Rot: [{math.degrees(self.current_velocity[3]):.1f}°/s, {math.degrees(self.current_velocity[4]):.1f}°/s, {math.degrees(self.current_velocity[5]):.1f}°/s]")
 
     def send_force(self):
         """
@@ -324,14 +271,14 @@ class Joystick(Node):
         # Incrémenter le compteur pour affichage périodique
         self.count += 1
         
-        # Vecteur pour stocker les forces de répulsion calculées
-        repulsion_force = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # [tx, ty, tz, rx, ry, rz]
+        # Vecteur pour stocker les forces calculées
+        total_force = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # [tx, ty, tz, rx, ry, rz]
         
         # Si on n'est pas en mode vitesse, envoyer des forces nulles
         if not self.in_speed_mode:
             # Create message to publish the force (toutes à zéro)
             force_message = Float32MultiArray()
-            force_message.data = repulsion_force
+            force_message.data = total_force
             
             # Publish force message with zeros
             self.force_joystick_pub.publish(force_message)
@@ -347,19 +294,32 @@ class Joystick(Node):
         critical_axis = False
         warning_axis = False
         
+        # Vérifier si les données du contrôleur sont trop anciennes
+        current_time = time.time()
+        if not self.controller_data_initialized or (current_time - self.last_controller_update_time) > self.controller_data_timeout:
+            # Données obsolètes, ne pas calculer de forces
+            force_message = Float32MultiArray()
+            force_message.data = total_force
+            self.force_joystick_pub.publish(force_message)
+            
+            if self.count % 100 == 0:
+                self.get_logger().debug("Données du contrôleur obsolètes - Forces mises à zéro")
+            return
+        
         # Tableau pour stocker les valeurs cartésiennes (translation + angles d'Euler)
         cartesian_values = [
             self.controleur_x, self.controleur_y, self.controleur_z,
             self.euler_x, self.euler_y, self.euler_z
         ]
 
-        # Calculer la distance et mettre à jour la masse de l'objet
-        self.calcul_distance()
-
         # CALCULER L'ACCÉLÉRATION À CHAQUE CYCLE
         self.calcul_accel()
-        
-        # Vérifier chaque axe et calculer la force si nécessaire
+
+        # Calculer la distance et mettre à jour la masse de l'objet
+        if self.distance_objet < 0.1 and self.pince <= 0.02:
+            self.masse_obj = 0.2
+
+        # Vérifier chaque axe et calculer les forces
         for axis in range(6):  # 6 axes: 3 translations + 3 rotations (euler)
             # Récupérer la position actuelle
             axis_position = cartesian_values[axis]
@@ -368,12 +328,12 @@ class Joystick(Node):
             limits = self.value_for_deplacement[axis]
             lower_threshold, upper_threshold, max_limit, min_limit = limits
             
-            # Calculer la force proportionnelle si l'axe est hors des seuils
-            force = 0.0
+            # FORCE DE RAPPEL (repulsion_force)
+            repulsion_force = 0.0
             in_warning_zone = False
             in_critical_zone = False
             
-            # Calcul de la force si en dehors des seuils
+            # Calcul de la force de rappel si en dehors des seuils
             if axis_position < lower_threshold:
                 # Plus on s'éloigne du seuil inférieur, plus la force est importante
                 distance = lower_threshold - axis_position
@@ -383,13 +343,10 @@ class Joystick(Node):
                     normalized_distance = distance / range_val  # 0 à 1
                     
                     if axis < 3:  # Translation
-                        # Récupérer l'accélération correspondante
                         accel = [self.accel_x, self.accel_y, self.accel_z][axis]
-                        parroies = [self.repulsion_parroies_x, self.repulsion_parroies_y, self.repulsion_parroies_z][axis]
-                        force = normalized_distance * self.max_force_by_axis[axis] + (self.masse + self.masse_obj) * accel + 1 + parroies
-
+                        repulsion_force = normalized_distance * self.max_force_by_axis[axis] + (self.masse + self.masse_obj) * accel + 1
                     else:  # Rotation (euler_x, euler_y, euler_z)
-                        force = self.stiffness_rotation * normalized_distance * self.max_torque_by_axis[axis-3]
+                        repulsion_force = self.stiffness_rotation * normalized_distance * self.max_torque_by_axis[axis-3] / 5
                     
                     # Déterminer les zones d'avertissement et critiques
                     if normalized_distance > 0.25:
@@ -406,12 +363,10 @@ class Joystick(Node):
                     normalized_distance = distance / range_val  # 0 à 1
                     
                     if axis < 3:  # Translation
-                        # Récupérer l'accélération correspondante
                         accel = [self.accel_x, self.accel_y, self.accel_z][axis]
-                        parroies = [self.repulsion_parroies_x, self.repulsion_parroies_y, self.repulsion_parroies_z][axis]
-                        force = - (normalized_distance * self.max_force_by_axis[axis]) + self.masse * accel - 1 + parroies
+                        repulsion_force = - (normalized_distance * self.max_force_by_axis[axis] + (self.masse + self.masse_obj) * accel + 1)
                     else:  # Rotation (euler_x, euler_y, euler_z)
-                        force = - (self.stiffness_rotation * normalized_distance * self.max_torque_by_axis[axis-3])
+                        repulsion_force = - (self.stiffness_rotation * normalized_distance * self.max_torque_by_axis[axis-3]) / 5
                     
                     # Déterminer les zones d'avertissement et critiques
                     if normalized_distance > 0.25:
@@ -419,16 +374,29 @@ class Joystick(Node):
                     if normalized_distance > 0.6:
                         in_critical_zone = True
             
-            # Limiter la force au maximum
+            # FORCE D'AMORTISSEMENT (opposée à la vitesse)
+            damping_force = 0.0
             if axis < 3:  # Translation
-                if abs(force) > self.max_force_by_axis[axis]:
-                    force = self.max_force_by_axis[axis] if force > 0 else -self.max_force_by_axis[axis]
-            else:  # Rotation (euler_x, euler_y, euler_z)
-                if abs(force) > self.max_torque_by_axis[axis-3]:
-                    force = self.max_torque_by_axis[axis-3] if force > 0 else -self.max_torque_by_axis[axis-3]
+                damping_force = -self.damping_coeff_translation * self.current_velocity[axis]
+            elif 3 < axis < 6:  # Rotation
+                damping_force = -self.damping_coeff_rotation * self.current_velocity[axis] / 5
+            else :
+                damping_force = -self.damping_coeff_rotation * self.current_velocity[axis] / 50
+            
+            # FORCE TOTALE: Rappel + Amortissement
+            total_axis_force = repulsion_force + damping_force
+            
+            # Limiter la force totale au maximum
+            if axis < 3:  # Translation
+                max_force = self.max_force_by_axis[axis]
+            else:  # Rotation
+                max_force = self.max_torque_by_axis[axis-3]
+            
+            # Appliquer les limites
+            total_axis_force = max(-max_force, min(max_force, total_axis_force))
             
             # Assigner la force calculée au bon axe
-            repulsion_force[axis] = force
+            total_force[axis] = total_axis_force
             
             # Mettre à jour les drapeaux globaux
             if in_critical_zone:
@@ -436,15 +404,15 @@ class Joystick(Node):
             if in_warning_zone:
                 warning_axis = True
             
-            # Log debug info every 1000 cycles
-            if self.count % 1000 == 0:
+            # Log debug info every 100 cycles
+            if self.count % 100 == 0:
                 axis_name = ["X trans", "Y trans", "Z trans", "Roll", "Pitch", "Yaw"][axis]
                 debug_str = f"Axe {axis_name}: "
                 
                 if axis < 3:
-                    debug_str += f"Pos={axis_position:.3f}m Force={force:.3f}N"
+                    debug_str += f"Pos={axis_position:.3f}m Rappel={repulsion_force:.3f}N Amort={damping_force:.3f}N Total={total_axis_force:.3f}N"
                 else:
-                    debug_str += f"Pos={math.degrees(axis_position):.1f}° Force={force:.3f}Nm"
+                    debug_str += f"Pos={math.degrees(axis_position):.1f}° Rappel={repulsion_force:.3f}Nm Amort={damping_force:.3f}Nm Total={total_axis_force:.3f}Nm"
                 
                 if in_critical_zone:
                     debug_str += " [CRITIQUE]"
@@ -457,21 +425,35 @@ class Joystick(Node):
         force_message = Float32MultiArray()
         
         # Fill force data
-        force_message.data = repulsion_force
+        force_message.data = total_force
         
         # Publish force message
         self.force_joystick_pub.publish(force_message)
         
-        # Display forces every 1000 cycles
+        # Display forces every 100 cycles
         if self.count % 100 == 0:
-            self.get_logger().debug(f"Mode Vitesse - Forces appliquées: F[{repulsion_force[0]:.2f}, {repulsion_force[1]:.2f}, {repulsion_force[2]:.2f}] " +
-                                  f"T[{repulsion_force[3]:.2f}, {repulsion_force[4]:.2f}, {repulsion_force[5]:.2f}]")
+            self.get_logger().debug(f"Mode Vitesse - Forces totales: F[{total_force[0]:.2f}, {total_force[1]:.2f}, {total_force[2]:.2f}] " +
+                                  f"T[{total_force[3]:.2f}, {total_force[4]:.2f}, {total_force[5]:.2f}]")
             
             # Status warning/critical
             if critical_axis:
                 self.get_logger().debug("ATTENTION: Axes en zone CRITIQUE")
             elif warning_axis:
                 self.get_logger().debug("Axes en zone d'ATTENTION")
+
+    def quaternion_multiply(self, q1, q2):
+        """
+        Multiplie deux quaternions q1 et q2.
+        Format des quaternions: (w, x, y, z)
+        """
+        w1, x1, y1, z1 = q1
+        w2, x2, y2, z2 = q2
+        return (
+            w1*w2 - x1*x2 - y1*y2 - z1*z2,
+            w1*x2 + x1*w2 + y1*z2 - z1*y2,
+            w1*y2 - x1*z2 + y1*w2 + z1*x2,
+            w1*z2 + x1*y2 - y1*x2 + z1*w2
+        )
 
     def quaternion_to_euler(self, qx, qy, qz, qw):
         """
@@ -502,26 +484,13 @@ class Joystick(Node):
         siny_cosp = 2 * (qw * qz + qx * qy)
         cosy_cosp = 1 - 2 * (qy * qy + qz * qz)
         yaw = math.atan2(siny_cosp, cosy_cosp)
+
+        if abs(pitch) > 1.2:
+            # Gimbal lock imminent
+            roll = 0.0
+            yaw = 0.0
         
         return roll, pitch, yaw
-
-    def euler_to_quaternion(self, roll, pitch, yaw):
-        """
-        Convertit des angles d'Euler (roll, pitch, yaw) en quaternion.
-        """
-        cy = math.cos(yaw * 0.5)
-        sy = math.sin(yaw * 0.5)
-        cp = math.cos(pitch * 0.5)
-        sp = math.sin(pitch * 0.5)
-        cr = math.cos(roll * 0.5)
-        sr = math.sin(roll * 0.5)
-        
-        qw = cr * cp * cy + sr * sp * sy
-        qx = sr * cp * cy - cr * sp * sy
-        qy = cr * sp * cy + sr * cp * sy
-        qz = cr * cp * sy - sr * sp * cy
-        
-        return qx, qy, qz, qw
     
     def calcul_accel(self):
         """
