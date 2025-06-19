@@ -2,7 +2,7 @@
 
 # Project Overview
 
-Ce projet est basé sur le dépôt Git : [https://github.com/frankarobotics/franka\_ros2](https://github.com/frankarobotics/franka_ros2), où vous pourrez trouver des informations complémentaires.
+Ce projet est basé sur le dépôt Git : (https://github.com/frankarobotics/franka_ros2), où vous pourrez trouver des informations complémentaires.
 
 Il a été modifié pour implémenter un système complet de téléopération pour le robot Franka FR3 en utilisant un contrôleur haptique **Haption Desktop 6D**. Ce système permet de contrôler le robot à distance avec un retour de force haptique, offrant ainsi une interface intuitive pour la manipulation robotique avancée. Il intègre également une simulation sous **Gazebo Fortress** afin de faciliter la prise en main du contrôleur.
 
