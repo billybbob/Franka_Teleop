@@ -1,212 +1,173 @@
-<h1 style="font-size: 3em;">ROS 2 Integration for Franka Robotics Research Robots</h1>
+---
 
-[![CI](https://github.com/frankaemika/franka_ros2/actions/workflows/ci.yml/badge.svg)](https://github.com/frankaemika/franka_ros2/actions/workflows/ci.yml)
+# Project Overview
 
-> **Note:** _franka_ros2_ is not officially supported on Windows.
+Ce projet est basé sur le dépôt Git : [https://github.com/frankarobotics/franka\_ros2](https://github.com/frankarobotics/franka_ros2), où vous pourrez trouver des informations complémentaires.
 
-#### Table of Contents
-- [About](#about)
-- [Caution](#caution)
-- [Setup](#setup)
-  - [Local Machine Installation](#local-machine-installation)
-  - [Docker Container Installation](#docker-container-installation)
-- [Test the Setup](#test-the-setup)
-- [Troubleshooting](#troubleshooting)
-  - [libfranka: UDP receive: Timeout error](#libfranka-udp-receive-timeout-error)
-- [Contributing](#contributing)
-- [License](#license)
-- [Contact](#contact)
+Il a été modifié pour implémenter un système complet de téléopération pour le robot Franka FR3 en utilisant un contrôleur haptique **Haption Desktop 6D**. Ce système permet de contrôler le robot à distance avec un retour de force haptique, offrant ainsi une interface intuitive pour la manipulation robotique avancée. Il intègre également une simulation sous **Gazebo Fortress** afin de faciliter la prise en main du contrôleur.
 
-# About
-The **franka_ros2** repository provides a **ROS 2** integration of **libfranka**, allowing efficient control of the Franka Robotics arm within the ROS 2 framework. This project is designed to facilitate robotic research and development by providing a robust interface for controlling the research versions of Franka Robotics robots.
+---
 
-For convenience, we provide Dockerfile and docker-compose.yml files. While it is possible to build **franka_ros2** directly on your local machine, this approach requires manual installation of certain dependencies, while many others will be automatically installed by the **ROS 2** build system (e.g., via **rosdep**). This can result in a large number of libraries being installed on your system, potentially causing conflicts. Using Docker encapsulates these dependencies within the container, minimizing such risks. Docker also ensures a consistent and reproducible build environment across systems. For these reasons, we recommend using Docker.
+## Prérequis
 
-# Caution
-This package is in rapid development. Users should expect breaking changes and are encouraged to report any bugs via [GitHub Issues page](https://github.com/frankaemika/franka_ros2/issues).
+## Installation
 
-# Franka ROS 2 Dependencies Setup
+1. **Installer l’environnement de développement ROS 2**
 
-This repository contains a `.repos` file that helps you clone the required dependencies for Franka ROS 2.
+   ***franka\_ros2*** repose sur ***ROS 2 Humble***.
 
-## Prerequisites
+   Pour configurer votre environnement ROS 2, suivez les instructions officielles d’installation de la version ***Humble***, disponibles [**ici**](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html).
 
-## Local Machine Installation
-1. **Install ROS 2 Development environment**
+   Le guide propose deux options principales d’installation : **Desktop** et **Bare Bones**.
 
-    _**franka_ros2**_ is built upon _**ROS 2 Humble**_.
+   #### Choisissez **une** des options suivantes :
 
-    To set up your ROS 2 environment, follow the official _**humble**_ installation instructions provided [**here**](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html).
-    The guide discusses two main installation options: **Desktop** and **Bare Bones**.
+   * **Installation "Desktop" de ROS 2** (`ros-humble-desktop`)
+     Inclut une installation complète avec les outils graphiques et les paquets de visualisation (ex : Rviz et Gazebo).
+     **Recommandé** pour les utilisateurs ayant besoin de simulation ou de visualisation.
 
-    #### Choose **one** of the following:
-    - **ROS 2 "Desktop Install"** (`ros-humble-desktop`)
-      Includes a full ROS 2 installation with GUI tools and visualization packages (e.g., Rviz and Gazebo).
-      **Recommended** for users who need simulation or visualization capabilities.
+   * **Installation "ROS-Base" (Bare Bones)** (`ros-humble-ros-base`)
+     Une installation minimale qui inclut uniquement les bibliothèques de base de ROS 2.
+     Adaptée aux environnements avec ressources limitées ou aux systèmes sans interface graphique.
 
-    - **"ROS-Base Install (Bare Bones)"** (`ros-humble-ros-base`)
-      A minimal installation that includes only the core ROS 2 libraries.
-      Suitable for resource-constrained environments or headless systems.
+   ```bash
+   # remplacez <YOUR CHOICE> par ros-humble-desktop ou ros-humble-ros-base
+   sudo apt install <YOUR CHOICE>
+   ```
 
-    ```bash
-    # replace <YOUR CHOICE> with either ros-humble-desktop or ros-humble-ros-base
-    sudo apt install <YOUR CHOICE>
-    ```
-    ---
-    Also install the **Development Tools** package:
-    ```bash
-    sudo apt install ros-dev-tools
-    ```
-    Installing the **Desktop** or **Bare Bones** should automatically source the **ROS 2** environment but, under some circumstances you may need to do this again:
-    ```bash
-    source /opt/ros/humble/setup.sh
-    ```
+   ---
 
-2. **Create a ROS 2 Workspace:**
+   Installez également les outils de développement :
+
+   ```bash
+   sudo apt install ros-dev-tools
+   ```
+
+   L’installation de la version **Desktop** ou **Bare Bones** devrait automatiquement sourcer l’environnement ROS 2, mais dans certains cas vous devrez le faire manuellement :
+
+   ```bash
+   source /opt/ros/humble/setup.sh
+   ```
+
+2. **Créer un espace de travail ROS 2 :**
+
    ```bash
    mkdir -p ~/franka_ros2_ws/src
-   cd ~/franka_ros2_ws  # not into src
+   cd ~/franka_ros2_ws  # pas dans le dossier src
    ```
-3. **Clone the Repositories:**
+
+3. **Cloner les dépôts :**
+
    ```bash
-    git clone https://github.com/frankaemika/franka_ros2.git src
-    ```
-4. **Install the dependencies**
-    ```bash
-    vcs import src < src/franka.repos --recursive --skip-existing
-    ```
-5. **Detect and install project dependencies**
+   git clone https://github.com/billybbob/Franka_Teleop.git src
+   ```
+
+4. **Installer les dépendances :**
+
+   ```bash
+   vcs import src < src/franka.repos --recursive --skip-existing
+   ```
+
+5. **Détecter et installer les dépendances du projet :**
+
    ```bash
    rosdep install --from-paths src --ignore-src --rosdistro humble -y
    ```
-6. **Build**
+
+6. **Prise en compte de l'API Raptor :**
+
+  '''bash
+  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/franka_ros2_ws/src/haption_raptor_api/Dependencies/RaptorAPI/bin/Linux/glibc-2.31
+  '''
+
+  Une fois cela fait vous allez pouvoir construire le dossier lié à cette API :
+
+  '''bash
+  colcon build --packages-select raptor_api_interfaces
+  '''
+
+  Placer le fichier *start_RaptorAPIWrapper.sh* en dehors du dossier source. Vous pouvez maintenant lancer RaptorAPIWrapper :
+
+  '''bash
+  source install/local_setup.bash
+  chmod +x start_RaptorAPIWrapper.sh
+  sudo ./start_RaptorAPIWrapper.sh
+  '''
+
+  Vous devriez avoir une erreur, vous disant que des fichier sont manquants dans /install/... Pour cela :
+
+  '''bash
+  sudo cp -R /src/Haption/lib /install/haption_raptor_api
+  '''
+
+  Vous pouvez maintenant relancer l'API, si cela fonctionne supprimer *haption_raptor_api* et *raptor_api_interfaces* du dossier source, ainsi que start_RaptorAPIWrapper.sh
+
+7. **Compiler le projet :**
+
    ```bash
-   # use the --symlinks option to reduce disk usage, and facilitate development.
+   # utilisez l’option --symlink-install pour réduire l’usage disque et faciliter le développement
    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
    ```
-7. **Adjust Enviroment**
+
+8. **Ajuster l’environnement :**
+
    ```bash
-   # Adjust environment to recognize packages and dependencies in your newly built ROS 2 workspace.
+   # Adapter l’environnement pour reconnaître les paquets et dépendances de votre workspace ROS 2 fraîchement compilé
    source install/setup.sh
    ```
 
-## Docker Container Installation
-The **franka_ros2** package includes a `Dockerfile` and a `docker-compose.yml`, which allows you to use `franka_ros2` packages without manually installing **ROS 2**. Also, the support for Dev Containers in Visual Studio Code is provided.
+---
+## Utilisation
 
-For detailed instructions, on preparing VSCode to use the `.devcontainer` follow the setup guide from [VSCode devcontainer_setup](https://code.visualstudio.com/docs/devcontainers/tutorial).
+1. **Calibration du contrôleur**
 
-1. **Clone the Repositories:**
-    ```bash
-    git clone https://github.com/frankaemika/franka_ros2.git
-    cd franka_ros2
-    ```
-    We provide separate instructions for using Docker with Visual Studio Code or the command line. Choose one of the following options:
+   Ouvrir une première fenêtre, la sourcer, et utiliser :
+  '''bash
+  ros2 run test_cartesien TestCalibration /etc/Haption/desktop_6D_n76.param "channel=SimpleChannelUDP:localip=0.0.0.0:localport=12120:remoteip=192.168.100.53:remoteport=5000"
+  '''
+  
+2.  **Lancement de la simulation**
 
-    Option A: Set up and use Docker from the command line (without Visual Studio Code).
+  Dans une seconde fenêtre, la sourcer également, et utiliser :
+  '''bash
+  ros2 launch franka_gazebo_bringup gazebo_joint_velocity_position.launch.py load_gripper:=true franka_hand:='franka_hand' robot_ip:=dont-care use_fake_hardware:=true
+  '''
 
-    Option B: Set up and use Docker with Visual Studio Code's Docker support.
+3. **Lancement du contrôleur**
 
-#### Option A: using Docker Compose
+  De retour dans la première fenêtre faire :
+  '''bash
+  ros2 run test_cartesien TestPoseCartesian
+  '''
 
-  2. **Save the current user id into a file:**
-      ```bash
-      echo -e "USER_UID=$(id -u $USER)\nUSER_GID=$(id -g $USER)" > .env
-      ```
-      It is needed to mount the folder from inside the Docker container.
+4. **Lancement du pilotage**
 
-  3. **Build the container:**
-      ```bash
-      docker compose build
-      ```
-  4. **Run the container:**
-      ```bash
-      docker compose up -d
-      ```
-  5. **Open a shell inside the container:**
-      ```bash
-      docker exec -it franka_ros2 /bin/bash
-      ```
-  6. **Clone the latests dependencies:**
-      ```bash
-      vcs import src < src/franka.repos --recursive --skip-existing
-      ```
-  7. **Build the workspace:**
-      ```bash
-      colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
-      ```
-  7. **Source the built workspace:**
-      ```bash
-      source install/setup.bash
-      ```
-  8. **When you are done, you can exit the shell and delete the container**:
-      ```bash
-      docker compose down -t 0
-      ```
+  Enfin dans une troisième (et quatrième) fenêtre.
+  Pour lancer le mode vitesse, ouvrir une nouvelle fenêtre, sourcé, et lancé :
+   '''bash
+  ros2 run test_cartesien value_to_speed
+  '''
 
-#### Option B: using Dev Containers in Visual Studio Code
+  Pour lancer le mode position, ouvrir une nouvelle fenêtre, sourcé, et lancé :
+  '''bash
+  ros2 run test_cartesien offset_position
+  '''
 
-  2. **Open Visual Studio Code ...**
+---
 
-        Then, open folder  `franka_ros2`
+## Intégration ROS 2 pour les robots de recherche Franka Robotics
 
-  3. **Choose `Reopen in container` when prompted.**
+[![CI](https://github.com/frankaemika/franka_ros2/actions/workflows/ci.yml/badge.svg)](https://github.com/frankaemika/franka_ros2/actions/workflows/ci.yml)
 
-      The container will be built automatically, as required.
+Consultez la documentation [Franka Control Interface (FCI)][fci-docs] pour plus d’informations.
 
-  4. **Clone the latests dependencies:**
-      ```bash
-      vcs import src < src/franka.repos --recursive --skip-existing
-      ```
+---
 
-  5. **Open a terminal and build the workspace:**
-      ```bash
-      colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
-      ```
-  6. **Source the built workspace environment:**
-      ```bash
-      source install/setup.bash
-      ```
+## Licence
 
+Tous les paquets du dépôt `franka_ros2` sont sous licence [Apache 2.0][apache-2.0].
 
-# Test the build
-   ```bash
-   colcon test
-   ```
-> Remember, franka_ros2 is under development.
-> Warnings can be expected.
+[apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0.html
+[fci-docs]: https://frankaemika.github.io/docs
 
-# Run a sample ROS 2 application
-
-To verify that your setup works correctly without a robot, you can run the following command to use dummy hardware:
-
-```bash
-ros2 launch franka_fr3_moveit_config moveit.launch.py robot_ip:=dont-care use_fake_hardware:=true
-```
-
-# Run Gazebo examples with ROS 2
-
-If you want to use Gazebo to run your code, you can find some examples here: [franka_gazebo](./franka_gazebo/README.md)
-
-
-# Troubleshooting
-#### `libfranka: UDP receive: Timeout error`
-
-If you encounter a UDP receive timeout error while communicating with the robot, avoid using Docker Desktop. It may not provide the necessary real-time capabilities required for reliable communication with the robot. Instead, using Docker Engine is sufficient for this purpose.
-
-A real-time kernel is essential to ensure proper communication and to prevent timeout issues. For guidance on setting up a real-time kernel, please refer to the [Franka installation documentation](https://frankaemika.github.io/docs/installation_linux.html#setting-up-the-real-time-kernel).
-
-# Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](https://github.com/frankaemika/franka_ros2/blob/humble/CONTRIBUTING.md) for more details on how to contribute to this project.
-
-## License
-
-All packages of franka_ros2 are licensed under the Apache 2.0 license.
-
-## Contact
-
-For questions or support, please open an issue on the [GitHub Issues](https://github.com/frankaemika/franka_ros2/issues) page.
-
-See the [Franka Control Interface (FCI) documentation](https://frankaemika.github.io/docs) for more information.
-
-[def]: #docker-container-installation
+---
