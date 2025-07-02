@@ -114,7 +114,7 @@ Il a été modifié pour implémenter un système complet de téléopération po
 
 ---
 
-## Utilisation
+## Utilisation avec la simulation
 
 1. **Calibration du contrôleur**
 
@@ -156,6 +156,51 @@ Il a été modifié pour implémenter un système complet de téléopération po
      ros2 run test_cartesien offset_position
      ```
 
+---
+
+## Utilisation avec un robot
+
+1. **Modification de programme**
+
+   Dû au fait que le robot crée des topics avec des noms différents de ceux de la simulation, il faut modifier certains codes. Ainsi pour mgd.py, franka_ik_solver.py et ....... il faut changer l'abonnement au topic "/joint_states" par "/NS_1/joint_states".
+
+3. **Démarrage du robot**
+
+   Aller sur internet et dans la barre de recherche mettre l'adresse IP du robot, soit ici : 192.168.100.XXX
+   Puis désactiver les freins, activer le FCI et se mettre en mode programme. Alors la lumière du robot devrait être en vert.
+
+4. **Calibration du contrôleur**
+
+   Ouvrir une première fenêtre, la sourcer, et utiliser :
+
+   ```bash
+   ros2 run test_cartesien TestCalibration /etc/Haption/desktop_6D_n76.param "channel=SimpleChannelUDP:localip=0.0.0.0:localport=12120:remoteip=192.168.100.53:remoteport=5000"
+   ```
+
+5. **Lancement du robot**
+
+   Dans une seconde fenêtre, la sourcer également, et utiliser :
+
+   ```bash
+   ros2 launch franka_bringup example.launch.py ros2 controller_name:=cartesian_velocity_example_controller robot_config_file:=/utilisateur/franka_ros2_ws/src/franka_bringup/config/custom_franka.config.yaml
+   ```
+
+6. **Lancement du contrôleur**
+
+   De retour dans la première fenêtre, faire :
+
+   ```bash
+   ros2 run test_cartesien TestPoseCartesian
+   ```
+
+7. **Lancement du pilotage**
+
+   Enfin, dans une troisième (et quatrième) fenêtre :
+
+   * Pour lancer le **mode vitesse**, ouvrir une nouvelle fenêtre, la sourcer, et lancer :
+
+     ```bash
+     ros2 run test_cartesien value_to_speed
 ---
 
 ## Intégration ROS 2 pour les robots de recherche Franka Robotics
