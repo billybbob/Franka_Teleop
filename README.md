@@ -162,7 +162,7 @@ Il a été modifié pour implémenter un système complet de téléopération po
 
 1. **Modification de programme**
 
-   Dû au fait que le robot crée des topics avec des noms différents de ceux de la simulation, il faut modifier certains codes. Ainsi pour mgd.py, franka_ik_solver.py et ....... il faut changer l'abonnement au topic "/joint_states" par "/NS_1/joint_states".
+   Dû au fait que le robot crée des topics avec des noms différents de ceux de la simulation, il faut modifier certains codes. Ainsi pour mgd.py, franka_ig_solver.py, force_position.py et force_vitesse.py il faut changer l'abonnement au topic "/joint_states" par "/NS_1/joint_states". De plus pour switch_mode.py il faut aussi faire un changement, passer de "joint_velocity_example_controller.py" à "cartesian_velocity_example_controller.py"
 
 3. **Démarrage du robot**
 
@@ -182,7 +182,7 @@ Il a été modifié pour implémenter un système complet de téléopération po
    Dans une seconde fenêtre, la sourcer également, et utiliser :
 
    ```bash
-   ros2 launch franka_bringup example.launch.py ros2 controller_name:=cartesian_velocity_example_controller robot_config_file:=/utilisateur/franka_ros2_ws/src/franka_bringup/config/custom_franka.config.yaml
+   ros2 launch franka_bringup example.launch.py ros2 controller_name:=joint_position_example_controller robot_config_file:=/utilisateur/franka_ros2_ws/src/franka_bringup/config/custom_franka.config.yaml
    ```
 
 6. **Lancement du contrôleur**
@@ -201,6 +201,22 @@ Il a été modifié pour implémenter un système complet de téléopération po
 
      ```bash
      ros2 run test_cartesien value_to_speed
+     ```
+
+   * Pour lancer le **mode position**, ouvrir une nouvelle fenêtre, la sourcer, et lancer :
+
+     ```bash
+     ros2 run test_cartesien offset_position
+     ```
+
+---
+
+## Erreur possible de rencontrer
+
+Lors de l'utilisation du contrôleur haptique il est possible d'avoir une "erreur 2", alors la communication avec ce dernier se coupe. Cela est dû au fait que la communication avec celui-ci est dépassé les 300ms. Malheureusement à cause du watchdogs implémenté en dur il n'y a pas de solution pour ce problème.
+
+Lors de l'utilisation avec le robot vous pourrez avoir une erreur de discontinuité de vitesse et/ou d'accélération ainsi qu'une violation des limites, cela peut arriver si vous essayer d'aller derrière le robot. Malheureusement là aussi il n'y a pas de solution.
+
 ---
 
 ## Intégration ROS 2 pour les robots de recherche Franka Robotics
