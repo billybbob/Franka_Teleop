@@ -233,5 +233,3 @@ Tous les paquets du dépôt `franka_ros2` sont sous licence [Apache 2.0][apache-
 
 [apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0.html
 [fci-docs]: https://frankaemika.github.io/docs
-
-```
