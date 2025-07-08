@@ -101,7 +101,7 @@ class DistanceParroies(Node):
         """       
         # Définir les limites de la cellule
         # Format: [min_x, max_x, min_y, max_y, min_z, max_z]
-        limites_cellule = [-1.0, 1.0, -0.5, 0.5, 0.0, 1.0]  # Exemple de limites en mètres
+        limites_cellule = [-2.0, 2.0, -1.0, 1.0, -1.0, 2.0]  # Exemple de limites en mètres
         
         # Calculer les distances aux parois
         distance_x_min = abs(self.x - limites_cellule[0])  # Distance à la paroi X minimum

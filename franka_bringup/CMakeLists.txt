@@ -13,6 +13,11 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(DIRECTORY utils/
+  DESTINATION lib/${PROJECT_NAME}/utils
+  FILES_MATCHING PATTERN "*.py"
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()

@@ -47,17 +47,33 @@ class CartesianPoseExampleController : public controller_interface::ControllerIn
 
  private:
   void cmd_pose_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
+  
+  // Fonctions utilitaires pour la limitation des vitesses
+  Eigen::Vector3d limitVelocity(const Eigen::Vector3d& velocity, double max_velocity);
+  Eigen::Vector3d limitAcceleration(const Eigen::Vector3d& target_velocity, 
+                                   const Eigen::Vector3d& current_velocity,
+                                   double max_acceleration, double dt);
 
   std::unique_ptr<franka_semantic_components::FrankaCartesianPoseInterface> franka_cartesian_pose_;
 
-  // Pose actuelle (pour l'initialisation)
+  // Pose actuelle
   Eigen::Quaterniond orientation_;
   Eigen::Vector3d position_;
+  Eigen::Quaterniond current_orientation_;
+  Eigen::Vector3d current_position_;
 
   // Commandes de pose cible (thread-safe)
   Eigen::Quaterniond target_orientation_;
   Eigen::Vector3d target_position_;
   std::mutex cmd_pose_mutex_;
+
+  // Variables de vitesse et accélération
+  Eigen::Vector3d current_linear_velocity_;
+  Eigen::Vector3d current_angular_velocity_;
+  Eigen::Vector3d previous_linear_velocity_;
+  Eigen::Vector3d previous_angular_velocity_;
+  Eigen::Vector3d target_linear_velocity_;
+  Eigen::Vector3d target_angular_velocity_;
 
   // Subscriber pour les commandes de pose
   rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr cmd_pose_subscriber_;

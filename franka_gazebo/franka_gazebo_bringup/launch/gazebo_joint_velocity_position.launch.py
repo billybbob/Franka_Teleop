@@ -2,18 +2,12 @@ import os
 import xacro
 
 from ament_index_python.packages import get_package_share_directory
-
-from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, ExecuteProcess, RegisterEventHandler
 from launch.event_handlers import OnProcessExit
-
-from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch import LaunchContext, LaunchDescription
-from launch.actions import IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.actions import IncludeLaunchDescription, TimerAction
 from launch_ros.actions import Node
 
 def get_robot_description(context: LaunchContext, arm_id, load_gripper, franka_hand):
@@ -34,7 +28,7 @@ def get_robot_description(context: LaunchContext, arm_id, load_gripper, franka_h
             'arm_id': arm_id_str, 
             'hand': load_gripper_str, 
             'ros2_control': 'true', 
-            'gazebo': 'false', 
+            'gazebo': 'true', 
             'ee_id': franka_hand_str
         }
     )
@@ -113,15 +107,6 @@ def generate_launch_description():
         ],
         output='screen',
     )
-
-    # Visualize in RViz
-    rviz_file = os.path.join(get_package_share_directory('franka_description'), 'rviz',
-                             'visualize_franka.rviz')
-    rviz = Node(package='rviz2',
-             executable='rviz2',
-             name='rviz2',
-             arguments=['--display-config', rviz_file, '-f', 'world'],
-    )
     
     # Chargement des contrôleurs dans le bon ordre
     load_joint_state_broadcaster = ExecuteProcess(
@@ -147,8 +132,29 @@ def generate_launch_description():
     # Charger le contrôleur de la pince en état actif
     gripper_example_controller = ExecuteProcess(
         cmd=['ros2', 'control', 'load_controller', '--set-state', 'active', 
-                'gripper_example_controller'],
+                'gripper_example_controller_simu'],
         output='screen'
+    )
+
+    # Envoie automatique du message GUICamera pour positionner la caméra
+    set_camera_pose = TimerAction(
+        period=5.0,
+        actions=[
+            ExecuteProcess(
+                cmd=[
+                    'ign', 'service', '-s', '/gui/move_to/pose',
+                    '--reqtype', 'ignition.msgs.GUICamera',
+                    '--reptype', 'ignition.msgs.Boolean',
+                    '--timeout', '2000',
+                    '--req',
+                    'pose: { position: {x: 0.0, y: 1.75, z: 0.6}, '
+                    'orientation: {x: 0, y: 0, z: -1, w: 1} }, '
+                    'follow_target: false, '
+                    'name: "user_camera"'
+                ],
+                output='screen'
+            )
+        ]
     )
 
     # Nœud pour lancer le solveur IK
@@ -178,7 +184,7 @@ def generate_launch_description():
     # Nœud pour lancer le noeud qui permet de changer de mode
     controller_switcher_node = Node(
         package='franka_teleop',
-        executable='switch_mode',
+        executable='switch_mode_simu',
         name='controller_switcher',
         output='screen'
     )
@@ -232,6 +238,19 @@ def generate_launch_description():
         output='screen'                 # Afficher la sortie à l'écran
     )
 
+    # Nœud pour lancer les caméras
+    camera_launcher_node = Node(
+        package='franka_teleop',        
+        executable='camera_launcher',  # Nouveau nom        
+        name='camera_launcher_node',                
+        output='screen',
+        parameters=[
+            {'world_name': 'demo'},
+            {'model_name': 'Cellule'},
+            {'launch_delay': 2.0}
+        ]
+    )
+
     return LaunchDescription([
         load_gripper_launch_argument,
         franka_hand_launch_argument,
@@ -242,7 +261,6 @@ def generate_launch_description():
                              description='Log level for the bridge'),
         gazebo_custom_world,
         robot_state_publisher,
-        rviz,
         spawn,
         RegisterEventHandler(
                 event_handler=OnProcessExit(
@@ -268,7 +286,6 @@ def generate_launch_description():
                 on_exit=[joint_velocity_example_controller],
             )
         ),
-        
         Node(
             package='joint_state_publisher',
             executable='joint_state_publisher',
@@ -287,4 +304,6 @@ def generate_launch_description():
         force_vitesse_node,
         distance_parois_node,
         guide_virtuel_node,
+        set_camera_pose,
+        #camera_launcher_node,
     ])

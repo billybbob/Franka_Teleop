@@ -21,11 +21,17 @@
 #include <exception>
 #include <string>
 #include <mutex>
+#include <algorithm>
 
 #include <Eigen/Eigen>
 #include <std_msgs/msg/float32_multi_array.hpp>
 
 namespace franka_example_controllers {
+
+// Limites de sécurité pour les vitesses
+constexpr double MAX_LINEAR_VELOCITY = 1.0;   // m/s
+constexpr double MAX_ANGULAR_VELOCITY = 0.75;  // rad/s
+constexpr double VELOCITY_SMOOTHING_FACTOR = 0.05; // Facteur de lissage
 
 controller_interface::InterfaceConfiguration
 CartesianVelocityExampleController::command_interface_configuration() const {
@@ -42,22 +48,57 @@ CartesianVelocityExampleController::state_interface_configuration() const {
       controller_interface::interface_configuration_type::NONE};
 }
 
+// Fonction pour valider et limiter les vitesses
+Eigen::Vector3d CartesianVelocityExampleController::limitVelocity(
+    const Eigen::Vector3d& velocity, double max_velocity) {
+  Eigen::Vector3d limited_velocity = velocity;
+  
+  // Vérifier les valeurs invalides (NaN, inf)
+  for (int i = 0; i < 3; ++i) {
+    if (!std::isfinite(limited_velocity(i))) {
+      limited_velocity(i) = 0.0;
+    }
+  }
+  
+  // Limiter la norme du vecteur vitesse
+  double velocity_norm = limited_velocity.norm();
+  if (velocity_norm > max_velocity) {
+    limited_velocity = limited_velocity * (max_velocity / velocity_norm);
+  }
+  
+  return limited_velocity;
+}
+
+// Fonction pour lisser les vitesses (éviter les discontinuités)
+Eigen::Vector3d CartesianVelocityExampleController::smoothVelocity(
+    const Eigen::Vector3d& target_velocity, const Eigen::Vector3d& current_velocity) {
+  return current_velocity + VELOCITY_SMOOTHING_FACTOR * (target_velocity - current_velocity);
+}
+
 controller_interface::return_type CartesianVelocityExampleController::update(
     const rclcpp::Time& /*time*/,
     const rclcpp::Duration& /*period*/) {
   
   // Récupération thread-safe des dernières commandes de vitesse
-  Eigen::Vector3d cartesian_linear_velocity;
-  Eigen::Vector3d cartesian_angular_velocity;
+  Eigen::Vector3d target_linear_velocity;
+  Eigen::Vector3d target_angular_velocity;
   
   {
     std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
-    cartesian_linear_velocity = current_linear_velocity_;
-    cartesian_angular_velocity = current_angular_velocity_;
+    target_linear_velocity = target_linear_velocity_;
+    target_angular_velocity = target_angular_velocity_;
   }
 
-  if (franka_cartesian_velocity_->setCommand(cartesian_linear_velocity,
-                                             cartesian_angular_velocity)) {
+  // Application des limites de sécurité et lissage
+  target_linear_velocity = limitVelocity(target_linear_velocity, MAX_LINEAR_VELOCITY);
+  target_angular_velocity = limitVelocity(target_angular_velocity, MAX_ANGULAR_VELOCITY);
+  
+  // Lissage pour éviter les discontinuités
+  current_linear_velocity_ = smoothVelocity(target_linear_velocity, current_linear_velocity_);
+  current_angular_velocity_ = smoothVelocity(target_angular_velocity, current_angular_velocity_);
+
+  if (franka_cartesian_velocity_->setCommand(current_linear_velocity_,
+                                             current_angular_velocity_)) {
     return controller_interface::return_type::OK;
   } else {
     RCLCPP_FATAL(get_node()->get_logger(),
@@ -69,10 +110,10 @@ controller_interface::return_type CartesianVelocityExampleController::update(
 void CartesianVelocityExampleController::cmd_vel_callback(
     const std_msgs::msg::Float32MultiArray::SharedPtr msg) {
   
-  // Vérification de la taille du message (6 éléments : 3 linéaires + 3 angulaires + pince)
+  // Vérification de la taille du message (6 éléments : 3 linéaires + 3 angulaires)
   if (msg->data.size() != 7) {
     RCLCPP_WARN(get_node()->get_logger(), 
-                "Received cmd_vel with incorrect size: %zu, expected 7", 
+                "Received cmd_vel with incorrect size: %zu, expected 6", 
                 msg->data.size());
     return;
   }
@@ -80,19 +121,19 @@ void CartesianVelocityExampleController::cmd_vel_callback(
   std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
   
   // Extraction des vitesses linéaires (x, y, z)
-  current_linear_velocity_(0) = msg->data[0];  // v_x
-  current_linear_velocity_(1) = msg->data[1];  // v_y
-  current_linear_velocity_(2) = msg->data[2];  // v_z
+  target_linear_velocity_(0) = msg->data[0];  // v_x
+  target_linear_velocity_(1) = -msg->data[1];  // v_y
+  target_linear_velocity_(2) = -msg->data[2];  // v_z
   
   // Extraction des vitesses angulaires (rx, ry, rz)
-  current_angular_velocity_(0) = msg->data[3];  // omega_x
-  current_angular_velocity_(1) = msg->data[4];  // omega_y
-  current_angular_velocity_(2) = msg->data[5];  // omega_z
+  target_angular_velocity_(0) = msg->data[3];  // omega_x
+  target_angular_velocity_(1) = -msg->data[4];  // omega_y
+  target_angular_velocity_(2) = -msg->data[5];  // omega_z
 
   RCLCPP_DEBUG(get_node()->get_logger(), 
                "Received cmd_vel: linear=[%.3f, %.3f, %.3f], angular=[%.3f, %.3f, %.3f]",
-               current_linear_velocity_(0), current_linear_velocity_(1), current_linear_velocity_(2),
-               current_angular_velocity_(0), current_angular_velocity_(1), current_angular_velocity_(2));
+               target_linear_velocity_(0), target_linear_velocity_(1), target_linear_velocity_(2),
+               target_angular_velocity_(0), target_angular_velocity_(1), target_angular_velocity_(2));
 }
 
 controller_interface::CallbackReturn CartesianVelocityExampleController::on_init() {
@@ -106,15 +147,21 @@ controller_interface::CallbackReturn CartesianVelocityExampleController::on_conf
       std::make_unique<franka_semantic_components::FrankaCartesianVelocityInterface>(
           franka_semantic_components::FrankaCartesianVelocityInterface(k_elbow_activated_));
 
-  // Création du subscriber pour /cmd_vel
+  // Création du subscriber pour /cmd_vel avec une QoS plus appropriée
+  rclcpp::QoS qos(10);
+  qos.reliability(rclcpp::ReliabilityPolicy::Reliable);
+  qos.durability(rclcpp::DurabilityPolicy::Volatile);
+  
   cmd_vel_subscriber_ = get_node()->create_subscription<std_msgs::msg::Float32MultiArray>(
       "/cmd_vel",
-      10,
+      qos,
       std::bind(&CartesianVelocityExampleController::cmd_vel_callback, this, std::placeholders::_1));
 
   // Initialisation des vitesses à zéro
   current_linear_velocity_.setZero();
   current_angular_velocity_.setZero();
+  target_linear_velocity_.setZero();
+  target_angular_velocity_.setZero();
 
   // Configuration du comportement de collision de manière sécurisée
   try {
@@ -145,7 +192,12 @@ controller_interface::CallbackReturn CartesianVelocityExampleController::on_conf
                 "Exception while setting collision behavior: %s", e.what());
   }
 
-  RCLCPP_INFO(get_node()->get_logger(), "Cartesian velocity controller configured. Listening to /cmd_vel");
+  RCLCPP_INFO(get_node()->get_logger(), 
+              "Cartesian velocity controller configured. Listening to /cmd_vel");
+  RCLCPP_INFO(get_node()->get_logger(), 
+              "Velocity limits: linear=%.2f m/s, angular=%.2f rad/s", 
+              MAX_LINEAR_VELOCITY, MAX_ANGULAR_VELOCITY);
+  
   return controller_interface::CallbackReturn::SUCCESS;
 }
 
@@ -158,6 +210,8 @@ controller_interface::CallbackReturn CartesianVelocityExampleController::on_acti
     std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
     current_linear_velocity_.setZero();
     current_angular_velocity_.setZero();
+    target_linear_velocity_.setZero();
+    target_angular_velocity_.setZero();
   }
   
   RCLCPP_INFO(get_node()->get_logger(), "Cartesian velocity controller activated");
@@ -173,6 +227,8 @@ controller_interface::CallbackReturn CartesianVelocityExampleController::on_deac
     std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
     current_linear_velocity_.setZero();
     current_angular_velocity_.setZero();
+    target_linear_velocity_.setZero();
+    target_angular_velocity_.setZero();
   }
   
   RCLCPP_INFO(get_node()->get_logger(), "Cartesian velocity controller deactivated");

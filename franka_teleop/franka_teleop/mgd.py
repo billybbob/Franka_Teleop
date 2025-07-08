@@ -44,7 +44,8 @@ class MGDNode(Node):
         # Création du subscriber pour les positions articulaires
         self.joint_sub = self.create_subscription(
             JointState, 
-            '/joint_states', 
+            #'/NS_1/joint_states', # Si c'est pour le vrai robot
+            '/joint_states', # Si c'est pour la simulation
             self.joint_callback, 
             10
         )
@@ -101,7 +102,7 @@ class MGDNode(Node):
             
             # Obtenir l'ID du frame de l'effecteur terminal
             # Nom typique pour l'effecteur du Franka Fr3
-            ee_frame_name = 'fr3_hand'
+            ee_frame_name = 'fr3_finger_joint1'
             
             # Vérifier si le frame existe
             if self.model.existFrame(ee_frame_name):
@@ -187,7 +188,7 @@ class MGDNode(Node):
         # Si le modèle inclut les pinces (2 doigts supplémentaires)
         if self.model.nq > 7:
             # Position des doigts (typiquement la dernière valeur)
-            q_full[7:] = 0.035  # Valeur typique pour les pinces du Fr3
+            q_full[7:] = 0.01  # Valeur typique pour les pinces du Fr3
         
         # Calcul de la cinématique directe
         pin.forwardKinematics(self.model, self.data, q_full)

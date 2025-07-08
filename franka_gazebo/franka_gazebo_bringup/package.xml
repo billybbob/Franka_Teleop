@@ -12,6 +12,9 @@
   <depend>joint_state_publisher_gui</depend>
   <depend>franka_description</depend>
   <depend>franka_ign_ros2_control</depend>
+  <depend>ros_gz_example_gazebo</depend>
+  <depend>franka_teleop</depend>
+  <depend>franka_gripper</depend>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

@@ -7,7 +7,7 @@
   <xacro:property name="arm_id" value="$(arg arm_id)"/>
 
   <xacro:include filename="$(find franka_fr3_moveit_config)/srdf/fr3_arm.xacro"/>
-  <xacro:fr3_arm arm_id="${arm_id}"/>
+  <xacro:fr3_arm arm_id="${arm_id}" hand="$(arg hand)"/>
 
   <xacro:if value="$(arg hand)">
     <xacro:include filename="$(find franka_fr3_moveit_config)/srdf/hand.xacro"/>

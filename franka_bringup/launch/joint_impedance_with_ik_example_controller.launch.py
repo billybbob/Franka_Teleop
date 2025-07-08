@@ -1,4 +1,4 @@
-#  Copyright (c) 2024 Franka Robotics GmbH
+#  Copyright (c) 2025 Franka Robotics GmbH
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -12,70 +12,57 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-
+import sys
+import os
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, OpaqueFunction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node
+from launch.substitutions import PathJoinSubstitution, LaunchConfiguration
 from launch_ros.substitutions import FindPackageShare
 
+# Add the path to the `utils` folder
+package_share = get_package_share_directory('franka_bringup')
+utils_path = os.path.join(package_share, '..', '..', 'lib', 'franka_bringup', 'utils')
+sys.path.append(os.path.abspath(utils_path))
 
-def generate_launch_description():
-    robot_ip_parameter_name = 'robot_ip'
-    arm_id_parameter_name = 'arm_id'
-    load_gripper_parameter_name = 'load_gripper'
-    use_fake_hardware_parameter_name = 'use_fake_hardware'
-    fake_sensor_commands_parameter_name = 'fake_sensor_commands'
-    use_rviz_parameter_name = 'use_rviz'
+from launch_utils import load_yaml  # noqa: E402
 
-    robot_ip = LaunchConfiguration(robot_ip_parameter_name)
-    arm_id = LaunchConfiguration(arm_id_parameter_name)
-    load_gripper = LaunchConfiguration(load_gripper_parameter_name)
-    use_fake_hardware = LaunchConfiguration(use_fake_hardware_parameter_name)
-    fake_sensor_commands = LaunchConfiguration(
-        fake_sensor_commands_parameter_name)
-    use_rviz = LaunchConfiguration(use_rviz_parameter_name)
 
-    return LaunchDescription([
-        DeclareLaunchArgument(
-            robot_ip_parameter_name,
-            description='Hostname or IP address of the robot.'),
-        DeclareLaunchArgument(
-            arm_id_parameter_name,
-            default_value='fr3',
-            description='ID of the type of arm used. Supported values: fer, fr3, fp3'),
-        DeclareLaunchArgument(
-            use_rviz_parameter_name,
-            default_value='false',
-            description='Visualize the robot in Rviz'),
-        DeclareLaunchArgument(
-            use_fake_hardware_parameter_name,
-            default_value='false',
-            description='Use fake hardware'),
-        DeclareLaunchArgument(
-            fake_sensor_commands_parameter_name,
-            default_value='false',
-            description="Fake sensor commands. Only valid when '{}' is true".format(
-                use_fake_hardware_parameter_name)),
-        DeclareLaunchArgument(
-            load_gripper_parameter_name,
-            default_value='true',
-            description='Use Franka Gripper as an end-effector, otherwise, the robot is loaded '
-                        'without an end-effector.'),
+def generate_robot_nodes(context):
+    additional_nodes = []
+    # Get the arguments from the launch configuration
+    robot_config_file = LaunchConfiguration('robot_config_file').perform(context)
 
+    # Include the existing example.launch.py file
+    additional_nodes.append(
         IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([PathJoinSubstitution(
-                [FindPackageShare('franka_bringup'), 'launch', 'franka.launch.py'])]),
-            launch_arguments={robot_ip_parameter_name: robot_ip,
-                              arm_id_parameter_name: arm_id,
-                              load_gripper_parameter_name: load_gripper,
-                              use_fake_hardware_parameter_name: use_fake_hardware,
-                              fake_sensor_commands_parameter_name: fake_sensor_commands,
-                              use_rviz_parameter_name: use_rviz
-                              }.items(),
-        ),
-        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                PathJoinSubstitution([
+                    FindPackageShare('franka_bringup'), 'launch', 'example.launch.py'
+                ])
+            ),
+            launch_arguments={
+                'robot_config_file': robot_config_file,
+                'controller_name': 'joint_impedance_with_ik_example_controller',
+            }.items(),
+        )
+    )
+
+    # Load the robot configuration file
+    configs = load_yaml(robot_config_file)
+
+    for _, config in configs.items():
+        robot_ip = config['robot_ip']
+        namespace = config['namespace']
+        load_gripper = config['load_gripper']
+        use_fake_hardware = config['use_fake_hardware']
+        fake_sensor_commands = config['fake_sensor_commands']
+        use_rviz = config['use_rviz']
+
+        # Define the additional nodes
+        additional_nodes.append(
+          IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 [
                     PathJoinSubstitution(
@@ -88,17 +75,28 @@ def generate_launch_description():
                 ]
             ),
             launch_arguments={
-                robot_ip: robot_ip,
-                load_gripper_parameter_name: load_gripper,
-                use_fake_hardware_parameter_name: 'true',
-                fake_sensor_commands_parameter_name: fake_sensor_commands,
-                use_rviz_parameter_name: use_rviz,
+                'robot_ip': str(robot_ip),
+                'namespace': str(namespace),
+                'load_gripper': str(load_gripper),
+                'use_fake_hardware': str(use_fake_hardware),
+                'fake_sensor_commands': str(fake_sensor_commands),
+                'use_rviz': str(use_rviz),
             }.items(),
+          ),
+        )
+    return additional_nodes
+
+
+def generate_launch_description():
+    return LaunchDescription([
+        # Declare launch arguments and add additional ones if needed
+        DeclareLaunchArgument(
+            'robot_config_file',
+            default_value=PathJoinSubstitution([
+                FindPackageShare('franka_bringup'), 'config', 'franka.config.yaml'
+            ]),
+            description='Path to the robot configuration file to load',
         ),
-        Node(
-            package='controller_manager',
-            executable='spawner',
-            arguments=['joint_impedance_with_ik_example_controller'],
-            output='screen',
-        ),
+        # Generate robot nodes
+        OpaqueFunction(function=generate_robot_nodes),
     ])

@@ -32,6 +32,7 @@ setup(
             'franka_ig_solver = franka_teleop.franka_ig_solver:main',
             'mgd = franka_teleop.mgd:main',
             'switch_mode = franka_teleop.switch_mode:main',
+            'switch_mode_simu = franka_teleop.switch_mode_simu:main',
             'fusion_joint_state = franka_teleop.fusion_joint_state:main',
             'force_position = franka_teleop.force_position:main',
             'force_vitesse = franka_teleop.force_vitesse:main',
@@ -39,6 +40,7 @@ setup(
             'distance_parois = franka_teleop.distance_parois:main',
             'distance_objet = franka_teleop.distance_objet:main',
             'guide_virtuel = franka_teleop.guide_virtuel:main',
+            'camera_launcher = franka_teleop.camera_launcher:main',
         ],
     },
 )

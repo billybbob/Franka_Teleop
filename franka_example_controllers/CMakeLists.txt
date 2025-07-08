@@ -39,6 +39,7 @@ add_library(
         src/elbow_example_controller.cpp
         src/gravity_compensation_example_controller.cpp
         src/gripper_example_controller.cpp
+        src/gripper_example_controller_simu.cpp
         src/joint_impedance_example_controller.cpp
         src/joint_impedance_with_ik_example_controller.cpp
         src/joint_position_example_controller.cpp

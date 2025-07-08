@@ -8,9 +8,10 @@ import rclpy
 from rclpy.node import Node
 from ament_index_python.packages import get_package_share_directory
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Float32MultiArray, Float64
+from std_msgs.msg import Float32MultiArray, Float64, Bool
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
+from tf2_msgs.msg import TFMessage
 
 class FrankaMGSolver(Node):
     def __init__(self):
@@ -64,11 +65,19 @@ class FrankaMGSolver(Node):
                 '/gripper_command_positions',
                 10
             )
+            
+            # Création d'un publisher pour l'état de sécurité de la cellule
+            self.safety_status_pub = self.create_publisher(
+                Bool,
+                '/cell_safety_status',
+                10
+            )
 
             # Créer un subscriber pour l'état actuel des articulations
             self.joint_state_sub = self.create_subscription(
                 JointState,
-                '/joint_states',
+                #'/NS_1/joint_states', # Si c'est pour le vrai robot
+                '/joint_states', # Si c'est pour la simulation
                 self.joint_state_callback,
                 10)
             
@@ -77,6 +86,22 @@ class FrankaMGSolver(Node):
                 Float32MultiArray, 
                 '/cmd_pose', 
                 self.cmd_pose_callback, 
+                10
+            )
+            
+            # Créer un subscriber pour la position de l'effecteur du robot
+            self.position_effecteur_robot_sub = self.create_subscription(
+                TFMessage, 
+                '/position_effecteur_robot', 
+                self.position_effecteur_robot_callback, 
+                10
+            )
+
+            # Création du subscriber pour la distance entre parroies et robot
+            self.distance_parroies_sub = self.create_subscription(
+                Float32MultiArray,
+                '/distance_robot_parroies',
+                self.distance_parroies_callback,
                 10
             )
             
@@ -94,6 +119,26 @@ class FrankaMGSolver(Node):
             self.mgi_max_iter = self.declare_parameter('mgi_max_iter', 100).value
             self.mgi_epsilon = self.declare_parameter('mgi_epsilon', 1e-4).value
             self.mgi_damping = self.declare_parameter('mgi_damping', 1e-6).value
+            
+            # Variables pour stocker la position actuelle de l'effecteur
+            self.x = 0.0
+            self.y = 0.0
+            self.z = 0.0
+            self.robot_pose_received_ = False
+
+            self.prev_error_norm = 0.0
+
+            # Initialiser les distances entre les parroies et l'effecteur du robot
+            self.distance_parroies_x = float('inf')  # Initialiser avec l'infini pour la sécurité
+            self.distance_parroies_y = float('inf')
+            self.distance_parroies_z = float('inf')
+            self.distances_received = False  # Flag pour savoir si on a reçu les distances
+            
+            # Distance de sécurité (5 cm)
+            self.marge_securite = 0.05  # en mètres
+            
+            # Timer pour vérifier régulièrement les limites de la cellule
+            self.safety_timer = self.create_timer(0.1, self.check_cell_limits)  # Vérification toutes les 100ms
             
         except Exception as e:
             self.get_logger().error(f"Erreur lors du chargement du modèle: {e}")
@@ -137,6 +182,141 @@ class FrankaMGSolver(Node):
             except:
                 pass  # Ignorer les articulations qui ne sont pas dans le modèle
     
+    def position_effecteur_robot_callback(self, msg):
+        """Callback pour recevoir la position de l'effecteur du robot depuis le topic TF"""
+        try:
+            # Parcourir les transformations pour trouver celle qui nous intéresse
+            for transform in msg.transforms:
+                # Vérifier si c'est la transformation de l'effecteur
+                if (transform.child_frame_id == 'fr3_hand_tcp' or 
+                    transform.child_frame_id == 'end_effector' or 
+                    'hand' in transform.child_frame_id or 
+                    'tcp' in transform.child_frame_id):
+                    # Mettre à jour la position de l'effecteur
+                    self.x = transform.transform.translation.x
+                    self.y = transform.transform.translation.y
+                    self.z = transform.transform.translation.z
+                    self.robot_pose_received_ = True
+                    break
+        except Exception as e:
+            self.get_logger().error(f"Erreur lors de la mise à jour de la position de l'effecteur: {e}")
+    
+    def update_current_ee_position(self):
+        """
+        Met à jour la position actuelle de l'effecteur en utilisant le MGD
+        Note: Cette méthode est conservée pour le fallback mais n'est plus utilisée
+        automatiquement puisque nous recevons maintenant la position via le topic TF.
+        """
+        try:
+            # Calculer le MGD avec les positions articulaires actuelles
+            current_q = self.current_joint_positions.copy()
+            if current_q.shape[0] == 7:
+                current_q = np.concatenate([current_q, [0.01, 0.01]])  # Ajouter les positions des doigts si nécessaire
+            
+            pin.forwardKinematics(self.model, self.data, current_q)
+            pin.updateFramePlacement(self.model, self.data, self.ee_id)
+            
+            # Stocker la position actuelle de l'effecteur
+            self.x = self.data.oMf[self.ee_id].translation[0]
+            self.y = self.data.oMf[self.ee_id].translation[1]
+            self.z = self.data.oMf[self.ee_id].translation[2]
+            self.robot_pose_received_ = True
+            
+        except Exception as e:
+            self.get_logger().error(f"Erreur lors du calcul de la position de l'effecteur: {e}")
+
+    def distance_parroies_callback(self, msg):
+        """Callback pour recevoir les distances calculées par le nœud distance_parois.py"""
+        if len(msg.data) < 3:
+            self.get_logger().error(f"Message de distance invalide: attendu au moins 3 valeurs, reçu {len(msg.data)}")
+            return
+            
+        self.distance_parroies_x = float(msg.data[0])
+        self.distance_parroies_y = float(msg.data[1])
+        self.distance_parroies_z = float(msg.data[2])
+        self.distances_received = True
+        
+        self.get_logger().debug(f"Distances reçues: X={self.distance_parroies_x:.3f}m, Y={self.distance_parroies_y:.3f}m, Z={self.distance_parroies_z:.3f}m")
+    
+    def limite_cellule(self):
+        """
+        Utilise les distances calculées par le nœud distance_parois.py pour vérifier
+        si l'effecteur du robot est trop proche des limites de la cellule.
+        """
+        # Vérifier que nous avons bien reçu les distances
+        if not self.distances_received:
+            self.get_logger().warn("Distances des parois non reçues, impossible de vérifier les limites de la cellule")
+            return True  # Autoriser le mouvement par défaut si pas de données
+        
+        # Vérifier si l'effecteur est trop proche des limites
+        trop_proche = False
+        message = ""
+        
+        # Vérification sur l'axe X
+        if self.distance_parroies_x < self.marge_securite:
+            trop_proche = True
+            message += f"Trop proche des parois X! (distance: {self.distance_parroies_x:.3f}m) "
+        
+        # Vérification sur l'axe Y
+        if self.distance_parroies_y < self.marge_securite:
+            trop_proche = True
+            message += f"Trop proche des parois Y! (distance: {self.distance_parroies_y:.3f}m) "
+        
+        # Vérification sur l'axe Z
+        if self.distance_parroies_z < self.marge_securite:
+            trop_proche = True
+            message += f"Trop proche des parois Z! (distance: {self.distance_parroies_z:.3f}m) "
+        
+        # Si trop proche, logger un message d'erreur et arrêter le robot
+        if trop_proche:
+            self.get_logger().error(f"ALERTE SÉCURITÉ: {message}")
+            # Publier l'état de sécurité
+            safety_msg = Bool()
+            safety_msg.data = False
+            self.safety_status_pub.publish(safety_msg)
+            return False  # Ne pas autoriser le mouvement
+        
+        # Publier l'état de sécurité (tout va bien)
+        safety_msg = Bool()
+        safety_msg.data = True
+        self.safety_status_pub.publish(safety_msg)
+        return True  # Autoriser le mouvement
+    
+    def check_cell_limits(self):
+        """Fonction appelée par le timer pour vérifier régulièrement les limites de la cellule"""
+        self.limite_cellule()
+    
+    def is_target_safe(self, target_position):
+        """
+        Vérifie si une position cible est sûre en estimant les distances aux parois.
+        Cette fonction peut être utilisée avant de résoudre le MGI.
+        """
+        # Si nous n'avons pas reçu les distances actuelles, on ne peut pas vérifier
+        if not self.distances_received or not self.robot_pose_received_:
+            self.get_logger().warn("Impossible de vérifier la sécurité de la cible: données insuffisantes")
+            return True  # Par défaut, autoriser si on ne peut pas vérifier
+        
+        # Calculer le déplacement prévu
+        current_pos = np.array([self.x, self.y, self.z])
+        target_pos = np.array(target_position)
+        deplacement = target_pos - current_pos
+        
+        # Estimer les nouvelles distances approximatives
+        # Note: Cette estimation est simplifiée et suppose un déplacement direct
+        estimated_dist_x = max(0, self.distance_parroies_x - abs(deplacement[0]))
+        estimated_dist_y = max(0, self.distance_parroies_y - abs(deplacement[1]))
+        estimated_dist_z = max(0, self.distance_parroies_z - abs(deplacement[2]))
+        
+        # Vérifier si les distances estimées restent au-dessus de la marge de sécurité
+        if (estimated_dist_x < self.marge_securite or 
+            estimated_dist_y < self.marge_securite or 
+            estimated_dist_z < self.marge_securite):
+            self.get_logger().warn(f"Position cible potentiellement dangereuse. Distances estimées: "
+                                 f"X={estimated_dist_x:.3f}m, Y={estimated_dist_y:.3f}m, Z={estimated_dist_z:.3f}m")
+            return False
+        
+        return True
+    
     def cmd_pose_callback(self, msg):
         """Callback pour recevoir une commande Float32MultiArray et calculer les angles articulaires par MGI"""
         if len(msg.data) < 7:
@@ -145,6 +325,16 @@ class FrankaMGSolver(Node):
         
         # Extraire la position cible (x, y, z)
         target_position = np.array(msg.data[0:3])
+        
+        # Vérifier d'abord les limites actuelles de la cellule
+        if not self.limite_cellule():
+            self.get_logger().warn("Mouvement bloqué: robot actuellement trop proche des limites de la cellule")
+            return
+        
+        # Vérifier si la position cible est sûre
+        if not self.is_target_safe(target_position):
+            self.get_logger().warn("Mouvement bloqué: position cible trop proche des limites de la cellule")
+            return
         
         # Extraire le quaternion (x, y, z, w)
         quat_x, quat_y, quat_z, quat_w = msg.data[3:7]
@@ -192,7 +382,7 @@ class FrankaMGSolver(Node):
             orientation_error_vec = pin.log3(solution_orientation.T @ target_orientation)
             orientation_error = np.linalg.norm(orientation_error_vec)
             
-            self.get_logger().info(f"Solution trouvée avec erreurs: position={position_error:.6f}m, orientation={orientation_error:.6f}rad")
+            self.get_logger().debug(f"Solution trouvée avec erreurs: position={position_error:.6f}m, orientation={orientation_error:.6f}rad")
             
             # Publier la solution pour les contrôleurs
             self.publish_joint_positions(q_solution)
@@ -202,6 +392,11 @@ class FrankaMGSolver(Node):
     
     def publish_joint_positions(self, q_solution):
         """Publie les positions articulaires calculées avec le type Float32MultiArray"""
+        # Vérifier une dernière fois les limites de la cellule
+        if not self.limite_cellule():
+            self.get_logger().warn("Publication des positions articulaires annulée: robot trop proche des limites de la cellule")
+            return
+            
         # Créer un message Float32MultiArray pour les positions articulaires
         joint_cmd = Float32MultiArray()
         
@@ -242,6 +437,20 @@ class FrankaMGSolver(Node):
         
         return q_result
     
+    def is_configuration_valid(self, q):
+        """Vérifie si une configuration est valide (pas en singularité)"""
+        if q.shape[0] == 7:
+            q_full = np.concatenate([q, [0.035, 0.035]])
+        else:
+            q_full = q.copy()
+        
+        pin.forwardKinematics(self.model, self.data, q_full)
+        J = pin.computeFrameJacobian(self.model, self.data, q_full, self.ee_id)
+        
+        # Vérifier le conditionnement de la Jacobienne
+        cond_number = np.linalg.cond(J)
+        return cond_number < 1e6  # Seuil à ajuster
+    
     def _solve_mgi(self, target_SE3, q_init):
         """Méthode interne pour résoudre le MGI avec une configuration initiale donnée"""
         # Tolérance et nombre max d'itérations pour le MGI
@@ -252,6 +461,12 @@ class FrankaMGSolver(Node):
         # Résolution MGI par la méthode de Levenberg-Marquardt
         q_result = q_init.copy()
         
+        # Vérifier d'abord si la configuration initiale est valide
+        if not self.is_configuration_valid(q_result):
+            self.get_logger().warn("Configuration initiale proche d'une singularité")
+            # Essayer de perturber légèrement la configuration
+            q_result += np.random.normal(0, 0.01, q_result.shape)
+
         for i in range(max_iter):
             # Calculer le MGD pour la configuration actuelle
             if q_result.shape[0] == 7:
@@ -280,8 +495,14 @@ class FrankaMGSolver(Node):
             
             # Pas d'adaptation pour éviter les grands changements
             alpha = min(1.0, 0.5 / max(1e-10, np.linalg.norm(dq)))
+            if error_norm > self.prev_error_norm:  # Si l'erreur augmente
+                alpha *= 0.5  # Réduire le pas
+            else:
+                alpha = min(1.0, alpha * 1.1)  # Augmenter légèrement le pas
+
             q_result += alpha * dq
-            
+            self.prev_error_norm = error_norm
+
             # Normaliser les angles et appliquer les limites articulaires
             q_result = pin.normalize(self.model, q_result)
             

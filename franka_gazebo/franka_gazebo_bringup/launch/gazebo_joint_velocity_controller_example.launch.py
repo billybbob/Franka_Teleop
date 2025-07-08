@@ -105,6 +105,16 @@ def generate_launch_description():
         launch_arguments={'gz_args': 'empty.sdf -r', }.items(),
     )
 
+    # Définir le chemin vers votre monde personnalisé
+    custom_world_path = os.path.join(get_package_share_directory('ros_gz_example_gazebo'), 'worlds', 'franka.sdf')
+
+    # Lancer Gazebo avec votre monde personnalisé
+    gazebo_custom_world = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')),
+        launch_arguments={'gz_args': f'{custom_world_path} -r', }.items(),
+    )
+
     # Spawn
     spawn = Node(
         package='ros_gz_sim',
@@ -134,11 +144,19 @@ def generate_launch_description():
         output='screen'
     )
 
+    # Nœud pour lancer le solveur IK
+    ik_solver_node = Node(
+        package='franka_teleop',      # Nom du package contenant le script
+        executable='franka_ik_solver', # Nom de l'exécutable
+        name='franka_ik_solver',      # Nom du nœud
+        output='screen'               # Afficher la sortie à l'écran
+    )
+
     return LaunchDescription([
         load_gripper_launch_argument,
         franka_hand_launch_argument,
         arm_id_launch_argument,
-        gazebo_empty_world,
+        gazebo_custom_world,
         robot_state_publisher,
         rviz,
         spawn,
@@ -162,4 +180,5 @@ def generate_launch_description():
                 {'source_list': ['joint_states'],
                  'rate': 30}],
         ),
+        ik_solver_node,
     ])

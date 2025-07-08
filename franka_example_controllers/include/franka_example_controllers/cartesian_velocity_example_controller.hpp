@@ -29,7 +29,7 @@ using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface
 namespace franka_example_controllers {
 
 /**
- * The cartesian velocity example controller
+ * The cartesian velocity example controller with acceleration limiting
  */
 class CartesianVelocityExampleController : public controller_interface::ControllerInterface {
  public:
@@ -56,10 +56,19 @@ class CartesianVelocityExampleController : public controller_interface::Controll
   
   // Callback pour les messages cmd_vel
   void cmd_vel_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
+
+  // Méthodes privées pour la validation et le lissage
+  Eigen::Vector3d limitVelocity(const Eigen::Vector3d& velocity, double max_velocity);
+  Eigen::Vector3d smoothVelocity(const Eigen::Vector3d& target_velocity, 
+                                 const Eigen::Vector3d& current_velocity);
   
   // Variables pour stocker les vitesses courantes
   Eigen::Vector3d current_linear_velocity_;
   Eigen::Vector3d current_angular_velocity_;
+
+  // Variables pour les vitesses cibles (reçues via topic)
+  Eigen::Vector3d target_linear_velocity_;
+  Eigen::Vector3d target_angular_velocity_;
   
   // Mutex pour la synchronisation thread-safe
   std::mutex cmd_vel_mutex_;

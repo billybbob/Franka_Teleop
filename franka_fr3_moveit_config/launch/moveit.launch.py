@@ -55,11 +55,13 @@ def generate_launch_description():
     robot_ip_parameter_name = 'robot_ip'
     use_fake_hardware_parameter_name = 'use_fake_hardware'
     fake_sensor_commands_parameter_name = 'fake_sensor_commands'
+    namespace_parameter_name = 'namespace'
 
     robot_ip = LaunchConfiguration(robot_ip_parameter_name)
     use_fake_hardware = LaunchConfiguration(use_fake_hardware_parameter_name)
     fake_sensor_commands = LaunchConfiguration(
         fake_sensor_commands_parameter_name)
+    namespace = LaunchConfiguration(namespace_parameter_name)
 
     # Command-line arguments
 
@@ -145,6 +147,7 @@ def generate_launch_description():
     run_move_group_node = Node(
         package='moveit_ros_move_group',
         executable='move_group',
+        namespace=namespace,
         output='screen',
         parameters=[
             robot_description,
@@ -181,6 +184,7 @@ def generate_launch_description():
         package='robot_state_publisher',
         executable='robot_state_publisher',
         name='robot_state_publisher',
+        namespace=namespace,
         output='both',
         parameters=[robot_description],
     )
@@ -193,6 +197,7 @@ def generate_launch_description():
     ros2_control_node = Node(
         package='controller_manager',
         executable='ros2_control_node',
+        namespace=namespace,
         parameters=[robot_description, ros2_controllers_path],
         remappings=[('joint_states', 'franka/joint_states')],
         output={
@@ -205,19 +210,23 @@ def generate_launch_description():
     # Load controllers
     load_controllers = []
     for controller in ['fr3_arm_controller', 'joint_state_broadcaster']:
-        load_controllers += [
+        load_controllers.append(
             ExecuteProcess(
-                cmd=['ros2 run controller_manager spawner {}'.format(
-                    controller)],
-                shell=True,
-                output='screen',
+                cmd=[
+                    'ros2', 'run', 'controller_manager', 'spawner', controller,
+                    '--controller-manager-timeout', '60',
+                    '--controller-manager',
+                    PathJoinSubstitution([namespace, 'controller_manager'])
+                ],
+                output='screen'
             )
-        ]
+        )
 
     joint_state_publisher = Node(
         package='joint_state_publisher',
         executable='joint_state_publisher',
         name='joint_state_publisher',
+        namespace=namespace,
         parameters=[
             {'source_list': ['franka/joint_states', 'fr3_gripper/joint_states'], 'rate': 30}],
     )
@@ -225,6 +234,7 @@ def generate_launch_description():
     franka_robot_state_broadcaster = Node(
         package='controller_manager',
         executable='spawner',
+        namespace=namespace,
         arguments=['franka_robot_state_broadcaster'],
         output='screen',
         condition=UnlessCondition(use_fake_hardware),
@@ -234,6 +244,11 @@ def generate_launch_description():
         robot_ip_parameter_name,
         description='Hostname or IP address of the robot.')
 
+    namespace_arg = DeclareLaunchArgument(
+        namespace_parameter_name,
+        default_value='',
+        description='Namespace for the robot.'
+    )
     use_fake_hardware_arg = DeclareLaunchArgument(
         use_fake_hardware_parameter_name,
         default_value='false',
@@ -247,10 +262,12 @@ def generate_launch_description():
         PythonLaunchDescriptionSource([PathJoinSubstitution(
             [FindPackageShare('franka_gripper'), 'launch', 'gripper.launch.py'])]),
         launch_arguments={'robot_ip': robot_ip,
-                          use_fake_hardware_parameter_name: use_fake_hardware}.items(),
+                          use_fake_hardware_parameter_name: use_fake_hardware,
+                          'namespace': namespace}.items(),
     )
     return LaunchDescription(
         [robot_arg,
+         namespace_arg,
          use_fake_hardware_arg,
          fake_sensor_commands_arg,
          db_arg,

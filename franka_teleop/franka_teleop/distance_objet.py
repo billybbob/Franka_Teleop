@@ -145,8 +145,8 @@ class DistanceObjet(Node):
         
         # Log périodique (toutes les 50 itérations pour éviter le spam)
         self.count += 1
-        if self.count % 50 == 0:
-            self.get_logger().debug(
+        if self.count % 10000 == 0:
+            self.get_logger().info(
                 f"Distance: {distance:.3f}m, "
                 f"Composantes: dx={dx:.3f}, dy={dy:.3f}, dz={dz:.3f}"
             )

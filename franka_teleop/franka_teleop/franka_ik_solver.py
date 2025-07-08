@@ -68,9 +68,11 @@ class FrankaIKSolver(Node):
             # Créer un subscriber pour l'état actuel des articulations
             self.joint_state_sub = self.create_subscription(
                 JointState,
-                '/joint_states',
+                #'/NS_1/joint_states', # Si c'est pour le vrai robot
+                '/joint_states', # Si c'est pour la simulation
                 self.joint_state_callback,
-                10)
+                10
+            )
             
             # Création du subscriber pour les vitesses cartésiennes (modification pour utiliser Float32MultiArray)
             self.cmd_vel_sub = self.create_subscription(
@@ -85,6 +87,14 @@ class FrankaIKSolver(Node):
                 TFMessage, 
                 '/position_effecteur_robot', 
                 self.position_effecteur_robot_callback, 
+                10
+            )
+
+            # Création du subscriber pour la distance entre parroies et robot
+            self.distance_parroies_sub = self.create_subscription(
+                Float32MultiArray,
+                '/distance_robot_parroies',
+                self.distance_parroies_callback,
                 10
             )
             
@@ -117,9 +127,18 @@ class FrankaIKSolver(Node):
             self.qy = 0.0
             self.qz = 0.0
             self.qw = 1.0  # Quaternion d'identité (pas de rotation)
+
+            # Initialiser les distances entre les parroies et l'effecteur du robot
+            self.distance_parroies_x = float('inf')  # Initialiser avec l'infini pour la sécurité
+            self.distance_parroies_y = float('inf')
+            self.distance_parroies_z = float('inf')
+            self.distances_received = False  # Flag pour savoir si on a reçu les distances
+            
+            # Distance de sécurité (5 cm)
+            self.marge_securite = 0.05  # en mètres
             
             # Créer un timer pour envoyer périodiquement des commandes de vitesse
-            self.timer = self.create_timer(0.1, self.send_cartesian_velocities)  # 10Hz
+            self.timer = self.create_timer(0.001, self.send_cartesian_velocities)  # 1000Hz
             
         except Exception as e:
             self.get_logger().error(f"Erreur lors du chargement du modèle: {e}")
@@ -217,61 +236,57 @@ class FrankaIKSolver(Node):
         # Calculer et envoyer la nouvelle position si nous avons les deux positions
         if hasattr(self, 'in_pose_mode_') and self.in_pose_mode_ and hasattr(self, 'controller_pose_received_') and self.controller_pose_received_:
             self.calculateAndSendCommand()
+
+    def distance_parroies_callback(self, msg):
+        """Callback pour recevoir les distances calculées par le nœud distance_parois.py"""
+        if len(msg.data) < 3:
+            self.get_logger().error(f"Message de distance invalide: attendu au moins 3 valeurs, reçu {len(msg.data)}")
+            return
+            
+        self.distance_parroies_x = float(msg.data[0])
+        self.distance_parroies_y = float(msg.data[1])
+        self.distance_parroies_z = float(msg.data[2])
+        self.distances_received = True
+        
+        self.get_logger().debug(f"Distances reçues: X={self.distance_parroies_x:.3f}m, Y={self.distance_parroies_y:.3f}m, Z={self.distance_parroies_z:.3f}m")
         
     def limite_cellule(self):
         """
-        Permet de calculer la distance entre la position de l'effecteur du robot
-        et les bords de la cellule. Si l'effecteur est à une distance inférieur de 5 cm, alors
+        Vérifie si l'effecteur du robot est trop proche des parois en utilisant
+        les distances calculées par le nœud distance_parois.py.
+        Si l'effecteur est à une distance inférieure de 5 cm, alors
         le robot s'arrête et met un message d'erreur dans la console.
+        
+        Returns:
+            bool: True si le mouvement est autorisé, False sinon
         """
-        # Vérifier que nous avons bien reçu la position du robot
-        if not hasattr(self, 'robot_pose_received_') or not self.robot_pose_received_:
-            self.get_logger().warn("Position du robot inconnue, impossible de vérifier les limites de la cellule")
-            return True  # Autoriser le mouvement par défaut
-        
-        # Définir les limites de la cellule (à adapter selon votre cellule réelle)
-        # Format: [min_x, max_x, min_y, max_y, min_z, max_z]
-        limites_cellule = [-2, 2, -1.5, 1.5, -0.5, 2]  # Exemple de limites en mètres
-        
-        # Distance de sécurité (5 cm)
-        marge_securite = 0.05  # en mètres
-        
-        # Position actuelle de l'effecteur
-        x = self.x  # Utiliser self.x au lieu de self.robot_pose_.x
-        y = self.y  # Utiliser self.y au lieu de self.robot_pose_.y
-        z = self.z  # Utiliser self.z au lieu de self.robot_pose_.z
+        # Vérifier que nous avons reçu les distances du nœud distance_parois
+        if not self.distances_received:
+            self.get_logger().warn("Aucune distance reçue du nœud distance_parois, impossible de vérifier les limites de la cellule")
+            return True  # Autoriser le mouvement par défaut si pas de données
         
         # Vérifier si l'effecteur est trop proche des limites
         trop_proche = False
         message = ""
         
         # Vérification sur l'axe X
-        if x < limites_cellule[0] + marge_securite:
+        if self.distance_parroies_x < self.marge_securite:
             trop_proche = True
-            message += f"Trop proche de la limite X minimale! (distance: {x - limites_cellule[0]:.3f}m) "
-        elif x > limites_cellule[1] - marge_securite:
-            trop_proche = True
-            message += f"Trop proche de la limite X maximale! (distance: {limites_cellule[1] - x:.3f}m) "
+            message += f"Trop proche des parois sur l'axe X! (distance: {self.distance_parroies_x:.3f}m) "
         
         # Vérification sur l'axe Y
-        if y < limites_cellule[2] + marge_securite:
+        if self.distance_parroies_y < self.marge_securite:
             trop_proche = True
-            message += f"Trop proche de la limite Y minimale! (distance: {y - limites_cellule[2]:.3f}m) "
-        elif y > limites_cellule[3] - marge_securite:
-            trop_proche = True
-            message += f"Trop proche de la limite Y maximale! (distance: {limites_cellule[3] - y:.3f}m) "
+            message += f"Trop proche des parois sur l'axe Y! (distance: {self.distance_parroies_y:.3f}m) "
         
         # Vérification sur l'axe Z
-        if z < limites_cellule[4] + marge_securite:
+        if self.distance_parroies_z < self.marge_securite:
             trop_proche = True
-            message += f"Trop proche de la limite Z minimale! (distance: {z - limites_cellule[4]:.3f}m) "
-        elif z > limites_cellule[5] - marge_securite:
-            trop_proche = True
-            message += f"Trop proche de la limite Z maximale! (distance: {limites_cellule[5] - z:.3f}m) "
+            message += f"Trop proche des parois sur l'axe Z! (distance: {self.distance_parroies_z:.3f}m) "
         
         # Si trop proche, logger un message d'erreur et arrêter le robot
         if trop_proche:
-            self.get_logger().error(f"ALERTE: {message}")
+            self.get_logger().error(f"ALERTE SÉCURITÉ: {message}")
             # Arrêter le robot en mettant toutes les vitesses à zéro
             self.set_cartesian_velocities(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
             return False  # Ne pas autoriser le mouvement

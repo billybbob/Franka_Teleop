@@ -43,7 +43,7 @@ private:
     std::vector<rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr> joint_publishers;
    
     // Constantes de configuration
-    const double Vmax_base = 0.3;  // Vitesse maximale de base
+    const double Vmax_base = 0.1;  // Vitesse maximale de base
     double speed_factor_;  // Facteur de vitesse provenant de la 4ème valeur du topic Mode_Pose_Vitesse
     double Vmax;  // Vitesse maximale ajustée (calculée comme Vmax_base * speed_factor_)
 
@@ -96,7 +96,7 @@ private:
         if (msg->data.size() >= 4) {
             speed_factor_ = static_cast<double>(msg->data[3]);
             Vmax = Vmax_base * speed_factor_;
-            RCLCPP_INFO(this->get_logger(), "Facteur de vitesse mis à jour: %f, Vmax ajusté: %f", speed_factor_, Vmax);
+            RCLCPP_DEBUG(this->get_logger(), "Facteur de vitesse mis à jour: %f, Vmax ajusté: %f", speed_factor_, Vmax);
         } else {
             // Si la 4ème valeur n'existe pas, utiliser la valeur par défaut
             speed_factor_ = 1.0;
@@ -253,11 +253,11 @@ private:
         cmd_vel_->publish(cmd_vel_msg);
 
         // Afficher les vitesses calculées (pour le débogage)
-        RCLCPP_INFO(this->get_logger(), "Vitesses linéaires publiées XYZ: [%f, %f, %f] avec Vmax: %f",
+        RCLCPP_DEBUG(this->get_logger(), "Vitesses linéaires publiées XYZ: [%f, %f, %f] avec Vmax: %f",
             cmd_vel_msg.data[0], cmd_vel_msg.data[1], cmd_vel_msg.data[2], Vmax);
-        RCLCPP_INFO(this->get_logger(), "Vitesses angulaires publiées RPY: [%f, %f, %f]",
+        RCLCPP_DEBUG(this->get_logger(), "Vitesses angulaires publiées RPY: [%f, %f, %f]",
             cmd_vel_msg.data[3], cmd_vel_msg.data[4], cmd_vel_msg.data[5]);
-        RCLCPP_INFO(this->get_logger(), "Vitesses de la gâchette: %f",
+        RCLCPP_DEBUG(this->get_logger(), "Vitesses de la gâchette: %f",
             cmd_vel_msg.data[6]);
     }
 };

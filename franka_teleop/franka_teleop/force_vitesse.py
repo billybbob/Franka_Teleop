@@ -44,7 +44,8 @@ class Joystick(Node):
         # Créer un subscriber pour l'état actuel des articulations
         self.joint_state_sub = self.create_subscription(
             JointState,
-            '/joint_states',
+            '/NS_1/joint_states', # Si c'est pour le vrai robot
+            #'/joint_states', # Si c'est pour la simulation
             self.joint_state_callback,
             10
         )
@@ -63,6 +64,7 @@ class Joystick(Node):
 
         # Initialiser la position de l'objet
         self.distance_objet = 0.0
+        self.force_distance_objet = 0.0
 
         # État des articulations (pour la callback joint_state)
         self.current_joint_positions = {}
@@ -162,7 +164,10 @@ class Joystick(Node):
             return
 
         self.distance_objet = (msg.data[0])
+        self.force_distance_objet = 0.0 #(1/self.distance_objet) / 5
+
         self.get_logger().debug(f"Distance entre le robot et l'objet : {self.distance_objet}")
+        self.get_logger().debug(f"Force en fonction de la distance entre le robot et l'objet : {self.force_distance_objet}")
 
         if self.distance_objet < 0.1 and self.pince <= 0.02:
             self.masse_obj = 0.2
@@ -315,10 +320,6 @@ class Joystick(Node):
         # CALCULER L'ACCÉLÉRATION À CHAQUE CYCLE
         self.calcul_accel()
 
-        # Calculer la distance et mettre à jour la masse de l'objet
-        if self.distance_objet < 0.1 and self.pince <= 0.02:
-            self.masse_obj = 0.2
-
         # Vérifier chaque axe et calculer les forces
         for axis in range(6):  # 6 axes: 3 translations + 3 rotations (euler)
             # Récupérer la position actuelle
@@ -344,7 +345,7 @@ class Joystick(Node):
                     
                     if axis < 3:  # Translation
                         accel = [self.accel_x, self.accel_y, self.accel_z][axis]
-                        repulsion_force = normalized_distance * self.max_force_by_axis[axis] + (self.masse + self.masse_obj) * accel + 1
+                        repulsion_force = normalized_distance * self.max_force_by_axis[axis] + (self.masse + self.masse_obj) * accel + self.force_distance_objet + 1
                     else:  # Rotation (euler_x, euler_y, euler_z)
                         repulsion_force = self.stiffness_rotation * normalized_distance * self.max_torque_by_axis[axis-3] / 5
                     
@@ -364,7 +365,7 @@ class Joystick(Node):
                     
                     if axis < 3:  # Translation
                         accel = [self.accel_x, self.accel_y, self.accel_z][axis]
-                        repulsion_force = - (normalized_distance * self.max_force_by_axis[axis] + (self.masse + self.masse_obj) * accel + 1)
+                        repulsion_force = - (normalized_distance * self.max_force_by_axis[axis] + (self.masse + self.masse_obj) * accel + self.force_distance_objet + 1)
                     else:  # Rotation (euler_x, euler_y, euler_z)
                         repulsion_force = - (self.stiffness_rotation * normalized_distance * self.max_torque_by_axis[axis-3]) / 5
                     

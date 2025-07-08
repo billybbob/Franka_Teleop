@@ -27,7 +27,7 @@ using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface
 namespace franka_example_controllers {
 
 /**
- * The joint position example controller
+ * The joint position example controller with trajectory smoothing
  */
 class JointPositionExampleController : public controller_interface::ControllerInterface {
  public:
@@ -47,6 +47,8 @@ class JointPositionExampleController : public controller_interface::ControllerIn
 
   std::mutex cmd_mutex_;
   std_msgs::msg::Float32MultiArray::SharedPtr last_joint_positions_;
+  std::vector<double> target_positions_raw_;  // Positions cibles brutes reçues
+  bool new_command_received_{false};
 
   bool is_gazebo_{false};
   bool use_external_targets_{false};
@@ -54,18 +56,28 @@ class JointPositionExampleController : public controller_interface::ControllerIn
   const int num_joints{7};
   
   std::vector<double> initial_q_;
-  std::vector<double> target_positions_;
+  std::vector<double> target_positions_;  // Positions cibles lissées
+  std::vector<double> current_velocities_;
+  std::vector<double> previous_positions_;
   
   double initial_robot_time_{0.0};
   double robot_time_{0.0};
   double elapsed_time_{0.0};
-  double trajectory_period_{0.001};  // Assuming a default value
+  double trajectory_period_{0.001};
   
-  // Modifié pour utiliser le bon type compatible avec le code source
+  // Paramètres de lissage
+  double max_velocity_{0.1};        // rad/s - vitesse maximale par articulation
+  double max_acceleration_{0.5};    // rad/s² - accélération maximale par articulation
+  double smoothing_factor_{0.001};    // Facteur de lissage pour le filtre passe-bas
+  
   rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr joint_command_subscriber_;
   
-  // Fonction de callback pour traiter les messages entrants
   void commandCallback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
+  
+  // Fonctions de lissage
+  void smoothTrajectory(double dt);
+  double limitVelocity(double desired_pos, double current_pos, double current_vel, double dt, int joint_idx);
+  double applyLowPassFilter(double new_value, double old_value, double alpha);
 };
 
 }  // namespace franka_example_controllers

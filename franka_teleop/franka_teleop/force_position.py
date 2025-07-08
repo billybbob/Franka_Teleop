@@ -45,7 +45,8 @@ class ForcePosition(Node):
         # Créer un subscriber pour l'état actuel des articulations
         self.joint_state_sub = self.create_subscription(
             JointState,
-            '/joint_states',
+            '/NS_1/joint_states', # Si c'est pour le vrai robot
+            #'/joint_states', # Si c'est pour la simulation
             self.joint_state_callback,
             10
         )
@@ -115,6 +116,7 @@ class ForcePosition(Node):
         # Initialiser les masses
         self.masse_pince = 0.73
         self.masse_obj = 0.0
+        self.force_distance_objet = 0.0
 
         # Initialiser la viscosité
         self.viscosite = 5.0
@@ -212,7 +214,9 @@ class ForcePosition(Node):
             return
 
         self.distance_objet = (msg.data[0])
+        self.force_distance_objet = 0.0 #( 1/self.distance_objet ) / 5
         self.get_logger().debug(f"Distance entre le robot et l'objet : {self.distance_objet}")
+        self.get_logger().debug(f"Force en fonction de la distance entre le robot et l'objet : {self.force_distance_objet}")
 
         if self.distance_objet < 0.1 and self.pince <= 0.02:
             self.masse_obj = 0.2
@@ -445,14 +449,10 @@ class ForcePosition(Node):
         self.calcul_accel_trans()
         self.calcul_accel_rot()
 
-        # Calculer la distance et mettre à jour la masse de l'objet
-        if self.distance_objet < 0.1 and self.pince <= 0.02:
-            self.masse_obj = 0.2
-
         # Calcul de la force F = m*a + V*v + Fs
-        self.force_x = - ( (self.masse_pince + self.masse_obj) * self.accel_x + self.viscosite * self.speed_x + self.frottement )
-        self.force_y = - ( (self.masse_pince + self.masse_obj) * self.accel_y + self.viscosite * self.speed_y + self.frottement )
-        self.force_z = - ( (self.masse_pince + self.masse_obj) * self.accel_z + self.viscosite * self.speed_z + self.frottement )
+        self.force_x = - ( (self.masse_pince + self.masse_obj) * self.accel_x + self.viscosite * self.speed_x + self.frottement + self.force_distance_objet)
+        self.force_y = - ( (self.masse_pince + self.masse_obj) * self.accel_y + self.viscosite * self.speed_y + self.frottement + self.force_distance_objet)
+        self.force_z = - ( (self.masse_pince + self.masse_obj) * self.accel_z + self.viscosite * self.speed_z + self.frottement + self.force_distance_objet)
 
         # Calcul du couple C = I*a + V*v + Cs
         self.force_rx = - ( (self.inertie_rx + self.inertie_tube_rx) * self.accel_rx/10 + self.viscosite_rot * self.speed_rx/5 + self.couple_sec )

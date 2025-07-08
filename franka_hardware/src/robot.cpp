@@ -36,12 +36,13 @@ Robot::Robot(const std::string& robot_ip, const rclcpp::Logger& logger) {
   franka::RealtimeConfig rt_config = franka::RealtimeConfig::kEnforce;
   if (!franka::hasRealtimeKernel()) {
     rt_config = franka::RealtimeConfig::kIgnore;
-    RCLCPP_WARN(
-        logger,
-        "You are not using a real-time kernel. Using a real-time kernel is strongly "
-        "recommended! Information about how to set up a real-time kernel can be found here: "
-        "https://frankaemika.github.io/docs/"
-        "installation_linux.html#setting-up-the-real-time-kernel");
+    RCLCPP_WARN(logger,
+                "\n\n*NOTICE*\n"
+                "You are not using a real-time kernel.\n"
+                "Using a real-time kernel is strongly recommended!\n"
+                "Information about how to set up a real-time kernel can be found here:\n"
+                "https://frankaemika.github.io/docs/"
+                "installation_linux.html#setting-up-the-real-time-kernel\n");
   }
   robot_ = std::make_unique<franka::Robot>(robot_ip, rt_config);
   model_ = std::make_unique<franka::Model>(robot_->loadModel());

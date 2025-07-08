@@ -527,16 +527,15 @@ private:
             // Mettre à jour le facteur d'échelle en continu basé sur la distance
             float new_scale_factor = distance_totale + 0.2f;
             
-            // Optionnel : ajouter des limites pour éviter des valeurs extrêmes
+            // Ajoute des limites pour éviter des valeurs extrêmes
             new_scale_factor = std::max(0.1f, std::min(2.0f, new_scale_factor));
             
-            // Optionnel : ajouter un seuil de changement pour éviter les micro-variations
+            // Ajoute un seuil de changement pour éviter les micro-variations
             if (std::abs(new_scale_factor - scale_factor_) > 0.01f) {
                 scale_factor_ = new_scale_factor;
                 
-                // Log optionnel pour debug (à commenter en production pour éviter le spam)
-                // RCLCPP_DEBUG(this->get_logger(), "Dynamic scale factor updated to: %f (distance: %f)", 
-                //              scale_factor_, distance_totale);
+                RCLCPP_DEBUG(this->get_logger(), "Dynamic scale factor updated to: %f (distance: %f)", 
+                              scale_factor_, distance_totale);
             }
         }
 
@@ -572,7 +571,7 @@ private:
                 scale_factor_);
             
             // Log les forces actuellement appliquées (combinaison des deux sources)
-            RCLCPP_INFO(this->get_logger(), "Applied force: X=%f, Y=%f, Z=%f, RX=%f, RY=%f, RZ=%f",
+            RCLCPP_DEBUG(this->get_logger(), "Applied force: X=%f, Y=%f, Z=%f, RX=%f, RY=%f, RZ=%f",
                 externalForce_.t_x + guideForce_.t_x + joystickForce_.t_x + repulparois_.t_x, 
                 externalForce_.t_y + guideForce_.t_y + joystickForce_.t_y + repulparois_.t_y, 
                 externalForce_.t_z + guideForce_.t_z + joystickForce_.t_z + repulparois_.t_z,

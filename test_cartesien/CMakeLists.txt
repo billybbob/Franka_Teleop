@@ -39,6 +39,8 @@ ament_target_dependencies(value_to_speed rclcpp std_msgs geometry_msgs tf2_msgs 
 
 add_executable(offset_position src/offset_position.cpp)
 ament_target_dependencies(offset_position rclcpp std_msgs geometry_msgs tf2_msgs raptor_api_interfaces)
+add_executable(offset_position_simu src/offset_position_simu.cpp)
+ament_target_dependencies(offset_position_simu rclcpp std_msgs geometry_msgs tf2_msgs raptor_api_interfaces)
 
 #add_dependencies(TestCalibration virtuose_generate_messages_cpp)
 target_include_directories(TestCalibration PUBLIC
@@ -72,6 +74,14 @@ ${CMAKE_CURRENT_SOURCE_DIR}/../../install/raptor_api_interfaces/include/raptor_a
 ${CMAKE_CURRENT_SOURCE_DIR}/../../install/raptor_api_interfaces/include/
 )
 
+#add_dependencies(offset_position_simu virtuose_generate_messages_cpp)
+target_include_directories(offset_position_simu PUBLIC
+$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+$<INSTALL_INTERFACE:include>
+${CMAKE_CURRENT_SOURCE_DIR}/../../install/raptor_api_interfaces/include/raptor_api_interfaces
+${CMAKE_CURRENT_SOURCE_DIR}/../../install/raptor_api_interfaces/include/
+)
+
 if(MSVC)  
 else()
 	execute_process(COMMAND /usr/bin/ldd --version
@@ -84,6 +94,7 @@ else()
     target_compile_definitions(TestPoseCartesian PUBLIC LINUX _OS_UNIX)
     target_compile_definitions(value_to_speed PUBLIC LINUX _OS_UNIX)
     target_compile_definitions(offset_position PUBLIC LINUX _OS_UNIX)
+    target_compile_definitions(offset_position_simu PUBLIC LINUX _OS_UNIX)
     set(CMAKE_C_FLAGS_RELEASE "-Wall")
     set(CMAKE_CXX_FLAGS_RELEASE "-Wall")
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
@@ -94,6 +105,7 @@ target_include_directories(TestCalibration PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/De
 target_include_directories(TestPoseCartesian PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/RaptorAPI/include)
 target_include_directories(value_to_speed PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/RaptorAPI/include)
 target_include_directories(offset_position PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/RaptorAPI/include)
+target_include_directories(offset_position_simu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/RaptorAPI/include)
 
 if(MSVC)
 
@@ -114,6 +126,10 @@ else()
     target_compile_definitions(offset_position PUBLIC LINUX)
     target_include_directories(offset_position PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/RaptorAPI/include/Linux/glibc-${GLIBC})
     target_link_libraries(offset_position ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/RaptorAPI/bin/Linux/glibc-${GLIBC}/libRaptorAPI.so -lpciaccess -ldl pthread)
+    
+    target_compile_definitions(offset_position_simu PUBLIC LINUX)
+    target_include_directories(offset_position_simu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/RaptorAPI/include/Linux/glibc-${GLIBC})
+    target_link_libraries(offset_position_simu ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/RaptorAPI/bin/Linux/glibc-${GLIBC}/libRaptorAPI.so -lpciaccess -ldl pthread)
 
 endif()
 
@@ -127,6 +143,9 @@ install(TARGETS value_to_speed
   DESTINATION lib/${PROJECT_NAME})
 
 install(TARGETS offset_position
+  DESTINATION lib/${PROJECT_NAME})
+  
+install(TARGETS offset_position_simu
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
