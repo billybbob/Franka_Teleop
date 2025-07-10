@@ -50,8 +50,8 @@ Il a été modifié pour implémenter un système complet de téléopération po
 2. **Créer un espace de travail ROS 2 :**
 
    ```bash
-   mkdir -p ~/franka_ros2_ws/src
-   cd ~/franka_ros2_ws  # pas dans le dossier src
+   mkdir -p ~/franka_teleop_ws/src
+   cd ~/franka_teleop_ws  # pas dans le dossier src
    ```
 
 3. **Cloner les dépôts :**
