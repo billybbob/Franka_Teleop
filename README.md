@@ -69,7 +69,7 @@ Il a été modifié pour implémenter un système complet de téléopération po
 5. **Détecter et installer les dépendances du projet :**
 
    ```bash
-   rosdep install --from-paths src --ignore-src --rosdistro humble -y
+   rosdep install --from-paths src --ignore-src --rosdistro humble -y --skip-keys="ros_gz_example_description numpy"
    ```
 
 6. **Prise en compte de l'API Raptor :**
