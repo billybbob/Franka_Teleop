@@ -74,31 +74,7 @@ Il a été modifié pour implémenter un système complet de téléopération po
 
 6. **Prise en compte de l'API Raptor :**
 
-   ```bash
-   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/franka_ros2_ws/src/haption_raptor_api/Dependencies/RaptorAPI/bin/Linux/glibc-2.31
-   ```
-
-   Une fois cela fait, vous allez pouvoir construire le dossier lié à cette API :
-
-   ```bash
-   colcon build --packages-select raptor_api_interfaces
-   ```
-
-   Placez le fichier `start_RaptorAPIWrapper.sh` en dehors du dossier source. Vous pouvez maintenant lancer RaptorAPIWrapper :
-
-   ```bash
-   source install/local_setup.bash
-   chmod +x start_RaptorAPIWrapper.sh
-   sudo ./start_RaptorAPIWrapper.sh
-   ```
-
-   Vous devriez avoir une erreur indiquant que des fichiers sont manquants dans `/install/...`. Pour cela :
-
-   ```bash
-   sudo cp -R /src/Haption/lib /install/haption_raptor_api
-   ```
-
-   Vous pouvez maintenant relancer l'API. Si cela fonctionne, supprimez `haption_raptor_api`, `raptor_api_interfaces` du dossier source, ainsi que `start_RaptorAPIWrapper.sh`.
+   Si vous avez accès au répertoire Haption alors faites les étapes indiquées sur ce git, si vous avez accès au dossier faites les étapes indiquées dans ce derniers. Sinon passer à la suite mais vous ne pourrez pas téléopérer le robot ni la simulation.
 
 7. **Compiler le projet :**
 
@@ -140,22 +116,6 @@ Il a été modifié pour implémenter un système complet de téléopération po
    ros2 run test_cartesien TestPoseCartesian
    ```
 
-4. **Lancement du pilotage**
-
-   Enfin, dans une troisième (et quatrième) fenêtre :
-
-   * Pour lancer le **mode vitesse**, ouvrir une nouvelle fenêtre, la sourcer, et lancer :
-
-     ```bash
-     ros2 run test_cartesien value_to_speed
-     ```
-
-   * Pour lancer le **mode position**, ouvrir une nouvelle fenêtre, la sourcer, et lancer :
-
-     ```bash
-     ros2 run test_cartesien offset_position
-     ```
-
 ---
 
 ## Utilisation avec un robot
@@ -164,12 +124,12 @@ Il a été modifié pour implémenter un système complet de téléopération po
 
    Dû au fait que le robot crée des topics avec des noms différents de ceux de la simulation, il faut modifier certains codes. Ainsi pour mgd.py, franka_ig_solver.py, force_position.py et force_vitesse.py il faut changer l'abonnement au topic "/joint_states" par "/NS_1/joint_states". De plus pour switch_mode.py il faut aussi faire un changement, passer de "joint_velocity_example_controller.py" à "cartesian_velocity_example_controller.py"
 
-3. **Démarrage du robot**
+2. **Démarrage du robot**
 
    Aller sur internet et dans la barre de recherche mettre l'adresse IP du robot, soit ici : 192.168.100.XXX
    Puis désactiver les freins, activer le FCI et se mettre en mode programme. Alors la lumière du robot devrait être en vert.
 
-4. **Calibration du contrôleur**
+3. **Calibration du contrôleur**
 
    Ouvrir une première fenêtre, la sourcer, et utiliser :
 
@@ -177,7 +137,7 @@ Il a été modifié pour implémenter un système complet de téléopération po
    ros2 run test_cartesien TestCalibration /etc/Haption/desktop_6D_n76.param "channel=SimpleChannelUDP:localip=0.0.0.0:localport=12120:remoteip=192.168.100.53:remoteport=5000"
    ```
 
-5. **Lancement du robot**
+4. **Lancement du robot**
 
    Dans une seconde fenêtre, la sourcer également, et utiliser :
 
@@ -185,29 +145,13 @@ Il a été modifié pour implémenter un système complet de téléopération po
    ros2 launch franka_bringup example.launch.py ros2 controller_name:=joint_position_example_controller robot_config_file:=/utilisateur/franka_ros2_ws/src/franka_bringup/config/custom_franka.config.yaml
    ```
 
-6. **Lancement du contrôleur**
+5. **Lancement du contrôleur**
 
    De retour dans la première fenêtre, faire :
 
    ```bash
    ros2 run test_cartesien TestPoseCartesian
    ```
-
-7. **Lancement du pilotage**
-
-   Enfin, dans une troisième (et quatrième) fenêtre :
-
-   * Pour lancer le **mode vitesse**, ouvrir une nouvelle fenêtre, la sourcer, et lancer :
-
-     ```bash
-     ros2 run test_cartesien value_to_speed
-     ```
-
-   * Pour lancer le **mode position**, ouvrir une nouvelle fenêtre, la sourcer, et lancer :
-
-     ```bash
-     ros2 run test_cartesien offset_position
-     ```
 
 ---
 
