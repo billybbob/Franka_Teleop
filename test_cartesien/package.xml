@@ -12,7 +12,6 @@
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
-  <depend>raptor_api_interfaces</depend>
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>tf2_msgs</depend>
