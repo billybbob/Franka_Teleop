@@ -1,7 +1,7 @@
 repositories:
   franka_description:
     type: git
-    url: https://github.com/frankaemika/franka_description.git
+    url: https://github.com/billybbob/franka_description.git
     version: 0.4.0
   libfranka:
     type: git
