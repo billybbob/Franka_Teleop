@@ -12,6 +12,7 @@ Il a été modifié pour implémenter un système complet de téléopération po
 - [Utilisation avec la simulation](#utilisation-avec-la-simulation)
 - [Utilisation avec un robot](#utilisation-avec-un-robot)
 - [Erreur possible de rencontrer](#erreur-possible-de-rencontrer)
+- [Conseil d'utilisation](#conseil-dutilisation)
   
 
 ## Prérequis
@@ -162,6 +163,13 @@ Il a été modifié pour implémenter un système complet de téléopération po
 
 ---
 
+## Conseil d'utilisation
+
+Pour les premiers essais il est conseillé d’utiliser la simulation, cependant si l’ordinateur est peu performant cette dernière peut ne pas être fluide. De plus pour les débuts il peut être envisageable de ne pas activé le retour de force lorsque vous êtes en mode position afin de comprendre comment se comporte le robot. Cependant avec le mode vitesse il est conseillé d’utiliser toujours le retour de force afin de savoir à n’importe quel instant où est la zone morte.
+Par la suite s’il y a volonté de rester en mode position et que le coefficient d’homothétie n’est pas suffisamment grand pour faire les mouvements souhaitez, vous pouvez utiliser l’homme-mort. Lorsque vous le touchez déplacer vous à l’opposer de là où vous souhaitez aller, puis une fois en limite du contrôleur relâchez l’homme-mort et faite votre mouvement. Attention cela va changer de place le repère du contrôleur, c’est pourquoi lorsque vous faites cela il est impératif d’avoir le bouton d’arrêt d’urgence à côté. De plus avec cette utilisation il est compliqué de passer par la suite le mode vitesse, puisque vous avez déplacé la zone morte en bougeant le repère.
+
+---
+
 ## Erreur possible de rencontrer
 
 Lors de l'utilisation du contrôleur haptique il est possible d'avoir une "erreur 2", alors la communication avec ce dernier se coupe. Cela est dû au fait que la communication avec celui-ci est dépassé les 300ms. Malheureusement à cause du watchdogs implémenté en dur il n'y a pas de solution pour ce problème.
@@ -180,7 +188,7 @@ Consultez la documentation [Franka Control Interface (FCI)][fci-docs] pour plus 
 
 ## Licence
 
-Tous les paquets du dépôt `franka_ros2` sont sous licence [Apache 2.0][apache-2.0].
+Tous les paquets du dépôt `Franka_Teleop` sont sous licence [Apache 2.0][apache-2.0].
 
 [apache-2.0]: https://www.apache.org/licenses/LICENSE-2.0.html
 [fci-docs]: https://frankaemika.github.io/docs
