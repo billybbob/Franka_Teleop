@@ -13,6 +13,7 @@ Il a été modifié pour implémenter un système complet de téléopération po
 - [Utilisation avec un robot](#utilisation-avec-un-robot)
 - [Erreur possible de rencontrer](#erreur-possible-de-rencontrer)
 - [Conseil d'utilisation](#conseil-dutilisation)
+- [Erreur possible de rencontrer](#erreur-possible-de-rencontrer)
   
 
 ## Prérequis
