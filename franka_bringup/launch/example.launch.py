@@ -12,6 +12,39 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+############################################################################
+# Parameters:
+# controller_name: Name of the controller to spawn (required, no default)
+# robot_config_file: Path to the robot configuration file to load
+#                   (default: franka.config.yaml in franka_bringup/config)
+#
+# The example.launch.py launch file provides a flexible and unified interface
+# for launching Franka Robotics example controllers via the 'controller_name'
+# parameter, such as 'elbow_example_controller'.
+# Example:
+# ros2 launch franka_bringup example.launch.py controller_name:=elbow_example_controller
+#
+# This script "includes" franka.launch.py to declare core component nodes,
+# including: robot_state_publisher, ros2_control_node, joint_state_publisher,
+# joint_state_broadcaster, franka_robot_state_broadcaster, and optionally
+# franka_gripper and rviz, with support for namespaced and non-namespaced
+# environments as defined in franka.config.yaml. RViz is launched if
+# 'use_rviz' is set to true in the configuration file.
+#
+# The default robot_config_file is franka.config.yaml in the
+# franka_bringup/config directory. See that file for its own documentation.
+#
+# This approach improves upon the earlier individual launch scripts, which
+# varied in structure and lacked namespace support, offering a more consistent
+# and maintainable solution. While some may favor the older scripts for their
+# specific use cases, example.launch.py enhances scalability and ease of use
+# for a wide range of Franka Robotics applications.
+#
+# Ensure the specified  controller_name matches a controller defined in
+#  controllers.yaml to avoid runtime errors.
+############################################################################
+
+
 import os
 import sys
 from ament_index_python.packages import get_package_share_directory
@@ -29,19 +62,21 @@ sys.path.append(os.path.abspath(utils_path))
 
 from launch_utils import load_yaml  # noqa: E402
 
+# Iterates over the uncommented lines in file specified by the robot_config_file parameter.
+# "Includes" franka.launch.py for each active (uncommented) Robot.
+# That file is well documented.
+# The function also checks if the 'use_rviz' parameter is set to true in the YAML file.
+# If so, it includes a node for RViz to visualize the robot's state.
+# The function returns a list of nodes to be launched.
+
 
 def generate_robot_nodes(context):
     config_file = LaunchConfiguration('robot_config_file').perform(context)
     controller_name = LaunchConfiguration('controller_name').perform(context)
-    gripper_controller_name = LaunchConfiguration('gripper_example_controller').perform(context)
-    cartesian_velocity_controller_name = LaunchConfiguration('cartesian_velocity_example_controller').perform(context)
     configs = load_yaml(config_file)
     nodes = []
-
     for item_name, config in configs.items():
         namespace = config['namespace']
-        
-        # Include base robot setup
         nodes.append(
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
@@ -63,8 +98,6 @@ def generate_robot_nodes(context):
                 }.items(),
             )
         )
-
-        # Spawner for main controller
         nodes.append(
             Node(
                 package='controller_manager',
@@ -73,40 +106,11 @@ def generate_robot_nodes(context):
                 arguments=[controller_name, '--controller-manager-timeout', '30'],
                 parameters=[PathJoinSubstitution([
                     FindPackageShare('franka_bringup'), 'config', "controllers.yaml",
-                ])],
-                output='screen',
-            )
-        )
-        
-        # Spawner for gripper controller
-        nodes.append(
-            Node(
-                package='controller_manager',
-                executable='spawner',
-                namespace=namespace,
-                arguments=[gripper_controller_name, '--controller-manager-timeout', '30'],
-                parameters=[PathJoinSubstitution([
-                    FindPackageShare('franka_bringup'), 'config', "controllers.yaml",
-                ])],
-                output='screen',
-            )
-        )
-        
-        # Spawner for cartesian velocity controller
-        nodes.append(
-            Node(
-                package='controller_manager',
-                executable='spawner',
-                namespace=namespace,
-                arguments=[cartesian_velocity_controller_name, '--inactive', '--controller-manager-timeout', '30'],
-                parameters=[PathJoinSubstitution([
-                    FindPackageShare('franka_bringup'), 'config', "controllers.yaml",
-                ])],
-                output='screen',
-            )
-        )
 
-    # Optional: RViz if use_rviz is set
+                ])],
+                output='screen',
+            )
+        )
     if any(str(config.get('use_rviz', 'false')).lower() == 'true' for config in configs.values()):
         nodes.append(
             Node(
@@ -119,88 +123,16 @@ def generate_robot_nodes(context):
                 output='screen',
             )
         )
-
     return nodes
+
+# The generate_launch_description function is the entry point (like "main")
+# It is called by the ROS 2 launch system when the launch file is executed.
+# via: ros2 launch franka_bringup example.launch.py ARGS...
+# This function must return a LaunchDescription object containing nodes to be launched.
+# it calls the generate_robot_nodes function to get the list of nodes to be launched.
 
 
 def generate_launch_description():
-
-    # Ajout de paramètres pour le pont ROS-Gazebo
-    use_sim_time = LaunchConfiguration('use_sim_time', default='true')
-
-    # Nœud pour lancer le force_vitesse
-    force_vitesse_node = Node(
-        package='franka_teleop',
-        executable='force_vitesse',
-        name='force_vitesse_node',
-        output='screen'
-    )
-
-    # Nœud pour lancer le force_position
-    force_position_node = Node(
-        package='franka_teleop',        # Nom du package contenant le script
-        executable='force_position',               # Nom de l'exécutable
-        name='force_position_node',                # Nom du nœud
-        output='screen'                 # Afficher la sortie à l'écran
-    )
-
-    # Nœud pour lancer le solveur IG
-    ig_solver_node = Node(
-        package='franka_teleop',      # Nom du package contenant le script
-        executable='franka_ig_solver', # Nom de l'exécutable
-        name='franka_ig_solver',      # Nom du nœud
-        output='screen'               # Afficher la sortie à l'écran
-    )
-
-    # Nœud pour lancer le MGD
-    mgd_node = Node(
-        package='franka_teleop',        # Nom du package contenant le script
-        executable='mgd',               # Nom de l'exécutable
-        name='mgd_node',                # Nom du nœud
-        output='screen'                 # Afficher la sortie à l'écran
-    )
-
-    # Nœud pour lancer le noeud qui permet de changer de mode
-    controller_switcher_node = Node(
-        package='franka_teleop',
-        executable='switch_mode',
-        name='controller_switcher',
-        output='screen'
-    )
-
-    # Nœud pour connaitre la position de la fiole
-    fiole_pose_monitor = Node(
-        package="franka_teleop",
-        executable="fiole_pose_monitor",
-        name="fiole_pose_monitor",
-        output="screen",
-        parameters=[{"use_sim_time": use_sim_time, "object_name": "Fiole_world", "poll_rate": 10.0}],
-    )
-
-    # Nœud pour connaitre la distance entre les parroies et l'effecteur du robot
-    distance_parois_node = Node(
-        package='franka_teleop',        # Nom du package contenant le script
-        executable='distance_parois',               # Nom de l'exécutable
-        name='distance_parois_node',                # Nom du nœud
-        output='screen'                 # Afficher la sortie à l'écran
-    )
-
-    # Nœud pour connaitre la distance entre l'objet et l'effecteur du robot
-    distance_objet_node = Node(
-        package='franka_teleop',        # Nom du package contenant le script
-        executable='distance_objet',               # Nom de l'exécutable
-        name='distance_objet_node',                # Nom du nœud
-        output='screen'                 # Afficher la sortie à l'écran
-    )
-
-    # Nœud pour lancer guide_virtuel
-    guide_virtuel_node = Node(
-        package='franka_teleop',        # Nom du package contenant le script
-        executable='guide_virtuel',               # Nom de l'exécutable
-        name='guide_virtuel_node',                # Nom du nœud
-        output='screen'                 # Afficher la sortie à l'écran
-    )
-
     return LaunchDescription([
         DeclareLaunchArgument(
             'robot_config_file',
@@ -213,26 +145,5 @@ def generate_launch_description():
             'controller_name',
             description='Name of the controller to spawn (required, no default)',
         ),
-        DeclareLaunchArgument('use_sim_time', default_value='false',
-                             description='Use simulation (Gazebo) clock if true'),
-        DeclareLaunchArgument(
-            'gripper_example_controller',
-            default_value='gripper_example_controller',
-            description='Name of the gripper controller to spawn',
-        ),
-        DeclareLaunchArgument(
-            'cartesian_velocity_example_controller',
-            default_value='cartesian_velocity_example_controller',
-            description='Name of the cartesian velocity controller to spawn',
-        ),
         OpaqueFunction(function=generate_robot_nodes),
-        force_vitesse_node,
-        force_position_node,
-        ig_solver_node,
-        mgd_node,
-        controller_switcher_node,
-        fiole_pose_monitor,
-        distance_parois_node,
-        distance_objet_node,
-        guide_virtuel_node,
     ])
