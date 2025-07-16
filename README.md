@@ -126,6 +126,10 @@ Il a été modifié pour implémenter un système complet de téléopération po
    ros2 run test_cartesien TestPoseCartesian
    ```
 
+4. **Arrêt de la simulation**
+
+  Pour arrêter la simulation il suffit de faire _ctrl+c_ dans les deux fenêtres.
+
 ---
 
 ## Utilisation avec un robot
@@ -152,7 +156,7 @@ Il a été modifié pour implémenter un système complet de téléopération po
    Dans une seconde fenêtre, la sourcer également, et utiliser :
 
    ```bash
-   ros2 launch franka_bringup example.launch.py ros2 controller_name:=joint_position_example_controller robot_config_file:=/utilisateur/franka_ros2_ws/src/franka_bringup/config/custom_franka.config.yaml
+   ros2 launch franka_bringup teleop_robot.launch.py ros2 controller_name:=joint_position_example_controller robot_config_file:=/utilisateur/franka_ros2_ws/src/franka_bringup/config/custom_franka.config.yaml
    ```
 
 5. **Lancement du contrôleur**
@@ -161,6 +165,14 @@ Il a été modifié pour implémenter un système complet de téléopération po
 
    ```bash
    ros2 run test_cartesien TestPoseCartesian
+   ```
+
+6. **Arrêt et remise en place du robot**
+
+   Pour arrêter les programme il suffit de faire _ctrl+c_ dans les deux fenêtres, et pour remettre le robot dans sa configuration de départ :
+   
+   ```bash
+   ros2 launch franka_bringup example.launch.py controller_name:=move_to_start_example_controller robot_config_file:=/home/vincent/robot_teleop/src/franka_bringup/config/custom_franka.config.yaml
    ```
 
 ---
