@@ -100,6 +100,7 @@ Il a été modifié pour implémenter un système complet de téléopération po
 ---
 
 ## Utilisation avec la simulation
+  Dû au fait que le robot crée des topics avec des noms différents de ceux de la simulation, il faut modifier certains codes. Ainsi pour mgd.py, franka_ig_solver.py, franka_ik_solver.py, force_position.py et force_vitesse.py il faut changer l'abonnement au topic "/NS_1/joint_states" par "/joint_states".
 
 1. **Calibration du contrôleur**
 
@@ -131,7 +132,7 @@ Il a été modifié pour implémenter un système complet de téléopération po
 
 1. **Modification de programme**
 
-   Dû au fait que le robot crée des topics avec des noms différents de ceux de la simulation, il faut modifier certains codes. Ainsi pour mgd.py, franka_ig_solver.py, force_position.py et force_vitesse.py il faut changer l'abonnement au topic "/joint_states" par "/NS_1/joint_states". De plus pour switch_mode.py il faut aussi faire un changement, passer de "joint_velocity_example_controller.py" à "cartesian_velocity_example_controller.py"
+   Dû au fait que le robot crée des topics avec des noms différents de ceux de la simulation, il faut modifier certains codes. Ainsi pour mgd.py, franka_ig_solver.py, franka_ik_solver.py, force_position.py et force_vitesse.py il faut changer l'abonnement au topic "/joint_states" par "/NS_1/joint_states".
 
 2. **Démarrage du robot**
 
