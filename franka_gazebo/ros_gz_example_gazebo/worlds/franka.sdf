@@ -282,7 +282,7 @@
 
         <!--    Caméra    --><!--    Caméra    --><!--    Caméra    --><!--    Caméra    --><!--    Caméra    -->
         <link name='Camera_gauche'>
-            <pose relative_to='__model__'>0.87 0 0.9 0 0.775 3.14</pose>
+            <pose relative_to='__model__'>0.85 0 0.9 0 0.775 3.14</pose>
             <inertial>
                 <mass>5</mass>
                 <inertia>
@@ -333,7 +333,7 @@
         </link>
 
         <link name='Camera_droite'>
-            <pose relative_to='__model__'>-0.87 0 0.9 0. 0.775 0.0</pose>
+            <pose relative_to='__model__'>-0.85 0 0.1 0. -0.4 0.0</pose>
             <inertial>
                 <mass>5</mass>
                 <inertia>
@@ -427,7 +427,7 @@
         <static>true</static>
         <pose>0 0 0 0 0 0</pose>
         <link name='Boite_Gauche'>
-            <pose relative_to='__model__'>0.6 0 0.125 0 0 0</pose>
+            <pose relative_to='__model__'>0.725 0 0.125 0 0 0</pose>
             <inertial>
                 <mass>12</mass>
                 <inertia>
@@ -461,7 +461,7 @@
         </link>
 
         <link name='Boite_Droite'>
-            <pose relative_to='__model__'>-0.625 0 0.0525 0 0 0</pose>
+            <pose relative_to='__model__'>-0.675 0 0.0525 0 0 0</pose>
             <inertial>
                 <mass>12</mass>
                 <inertia>
@@ -501,7 +501,7 @@
 
     <model name='Fiole' canonical_link='Fiole_world'>
         <static>false</static>
-        <pose>0.45 0 0.42 0 0 0</pose>
+        <pose>0.6 0 0.42 0 0 0</pose>
         <link name='Fiole_world'>
             <pose>0.0 0 0.0 0 0 0</pose>
             <inertial>
@@ -530,7 +530,7 @@
             <collision name='collision'>
                 <geometry>
                     <box>
-                        <size>0.011 0.011 0.09</size>
+                        <size>0.0175 0.0175 0.09</size>
                     </box>
                 </geometry>
                 <surface>
@@ -579,7 +579,7 @@
             <visual name='visual'>
                 <geometry>
                     <box>
-                        <size>1.1 1.0 0.05</size>
+                        <size>1.25 1.0 0.05</size>
                     </box>
                 </geometry>
                 <material>
@@ -606,7 +606,7 @@
         <static>true</static>
         <pose>0 0 0 0 0 0</pose>
         <link name='RTP_world'>
-            <pose relative_to='__model__'>0.6 0 0.35 0 1.57 0</pose>
+            <pose relative_to='__model__'>0.75 0 0.35 0 1.57 0</pose>
             <inertial>
                 <mass>12</mass>
                 <inertia>
@@ -642,7 +642,7 @@
         </link>
     
         <link name='Tiroir'>
-            <pose relative_to='__model__'>0.45 0 0.35 0 0 0</pose>
+            <pose relative_to='__model__'>0.6 0 0.35 0 0 0</pose>
             <inertial>
                 <mass>12</mass>
                 <inertia>
