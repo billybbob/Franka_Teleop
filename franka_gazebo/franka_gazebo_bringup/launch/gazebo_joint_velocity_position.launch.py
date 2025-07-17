@@ -305,5 +305,5 @@ def generate_launch_description():
         distance_parois_node,
         guide_virtuel_node,
         set_camera_pose,
-        #camera_launcher_node,
+        camera_launcher_node,
     ])
