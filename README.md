@@ -179,7 +179,16 @@ Il a été modifié pour implémenter un système complet de téléopération po
 
 ## Conseil d'utilisation
 
+**Présentation du matériel :**
+Pour activer le retour de force il faut appuyer sur le bouton vert situé sur la base du contrôleur.
+Pour passer d'un mode de pilotage à un autre il faut utiliser le boitier de commande et appuyé sur le bouton blanc centrale.
+Pour diminuer ou augmenter le coefficient d'homothétie et la vitesse maximale, il faut appuyer sur le bouton de gauche pour diminuer cette valeur ou de droite pour l'augmenter.
+Pour activer le guide virtuel il vous faut rester appuyé 5s sur le bouton de gauche.
+Pour activer le coefficient d'homothétie et de vitesse de manière dynamique, il va diminuer lorsque l'on s'approche de l'élément cible, il faut rester appuyé 5s sur le bouton de droite.
+La gâchette sert à utiliser la pince, son mode foncitonnement en simulation et en réel et différent. En simulation elle a deux mode soit vitesse soit position, et en réel qu'un seule qui est si cette dernière dépasse la moitié de sa course elle ferme la pince du robot sinon elle est ouverte.
+
 Pour les premiers essais il est conseillé d’utiliser la simulation, cependant si l’ordinateur est peu performant cette dernière peut ne pas être fluide. De plus pour les débuts il peut être envisageable de ne pas activé le retour de force lorsque vous êtes en mode position afin de comprendre comment se comporte le robot. Cependant avec le mode vitesse il est conseillé d’utiliser toujours le retour de force afin de savoir à n’importe quel instant où est la zone morte.
+
 Par la suite s’il y a volonté de rester en mode position et que le coefficient d’homothétie n’est pas suffisamment grand pour faire les mouvements souhaitez, vous pouvez utiliser l’homme-mort. Lorsque vous le touchez déplacer vous à l’opposer de là où vous souhaitez aller, puis une fois en limite du contrôleur relâchez l’homme-mort et faite votre mouvement. Attention cela va changer de place le repère du contrôleur, c’est pourquoi lorsque vous faites cela il est impératif d’avoir le bouton d’arrêt d’urgence à côté. De plus avec cette utilisation il est compliqué de passer par la suite le mode vitesse, puisque vous avez déplacé la zone morte en bougeant le repère.
 
 ---
@@ -188,7 +197,9 @@ Par la suite s’il y a volonté de rester en mode position et que le coefficien
 
 Lors de l'utilisation du contrôleur haptique il est possible d'avoir une "erreur 2", alors la communication avec ce dernier se coupe. Cela est dû au fait que la communication avec celui-ci est dépassé les 300ms. Malheureusement à cause du watchdogs implémenté en dur il n'y a pas de solution pour ce problème.
 
-Lors de l'utilisation avec le robot vous pourrez avoir une erreur de discontinuité de vitesse et/ou d'accélération ainsi qu'une violation des limites, cela peut arriver si vous essayer d'aller derrière le robot. Malheureusement là aussi il n'y a pas de solution.
+Lors de l'utilisation avec le robot vous pourrez avoir une erreur de discontinuité de vitesse et/ou d'accélération ainsi qu'une violation des limites, cela peut arriver si vous essayer d'aller derrière le robot ou si vous allez trop vite. Malheureusement là aussi il n'y a pas de solution.
+
+Lors de l'utilisation avec la simulation cette dernière peut être lente, pour fluidifier celle-ci vous pouvez mettre en commentaire la ligne 308 du code _gazebo_joint_velocity_position.launch.py_. De plus l'affichage des caméras peut bugger, si c'est le cas vous pouvez là aussi mettre en commentaire la ligne mentionné précédemment. Pour toujours avoir accès à ces caméras vous pouvez lancer la simulation, puis dans la fenêtre de Gazebo cliquer sur les 3 points en haut à droite et entrer le nom du plugin **Image Display**, faite le deux fois et séléctionner les caméras voulus pour avoir les deux points de vus.
 
 ---
 
