@@ -180,12 +180,12 @@ Il a été modifié pour implémenter un système complet de téléopération po
 ## Conseil d'utilisation
 
 **Présentation du matériel :**
-Pour activer le retour de force il faut appuyer sur le bouton vert situé sur la base du contrôleur.
-Pour passer d'un mode de pilotage à un autre il faut utiliser le boitier de commande et appuyé sur le bouton blanc centrale.
-Pour diminuer ou augmenter le coefficient d'homothétie et la vitesse maximale, il faut appuyer sur le bouton de gauche pour diminuer cette valeur ou de droite pour l'augmenter.
-Pour activer le guide virtuel il vous faut rester appuyé 5s sur le bouton de gauche.
-Pour activer le coefficient d'homothétie et de vitesse de manière dynamique, il va diminuer lorsque l'on s'approche de l'élément cible, il faut rester appuyé 5s sur le bouton de droite.
-La gâchette sert à utiliser la pince, son mode foncitonnement en simulation et en réel et différent. En simulation elle a deux mode soit vitesse soit position, et en réel qu'un seule qui est si cette dernière dépasse la moitié de sa course elle ferme la pince du robot sinon elle est ouverte.
+  - Pour activer le retour de force il faut appuyer sur le bouton vert situé sur la base du contrôleur.
+  - Pour passer d'un mode de pilotage à un autre il faut utiliser le boitier de commande et appuyé sur le bouton blanc centrale.
+  - Pour diminuer ou augmenter le coefficient d'homothétie et la vitesse maximale, il faut appuyer sur le bouton de gauche pour diminuer cette valeur ou de droite pour l'augmenter.
+  - Pour activer le guide virtuel il vous faut rester appuyé 5s sur le bouton de gauche.
+  - Pour activer le coefficient d'homothétie et de vitesse de manière dynamique, il va diminuer lorsque l'on s'approche de l'élément cible, il faut rester appuyé 5s sur le bouton de droite.
+  - La gâchette sert à utiliser la pince, son mode foncitonnement en simulation et en réel et différent. En simulation elle a deux mode soit vitesse soit position, et en réel qu'un seule qui est si cette dernière dépasse la moitié de sa course elle ferme la pince du robot sinon elle est ouverte.
 
 Pour les premiers essais il est conseillé d’utiliser la simulation, cependant si l’ordinateur est peu performant cette dernière peut ne pas être fluide. De plus pour les débuts il peut être envisageable de ne pas activé le retour de force lorsque vous êtes en mode position afin de comprendre comment se comporte le robot. Cependant avec le mode vitesse il est conseillé d’utiliser toujours le retour de force afin de savoir à n’importe quel instant où est la zone morte.
 
