@@ -190,7 +190,7 @@ class Joystick(Node):
         # ============================================================================
         
         # Coefficients d'amortissement pour stabiliser le mouvement
-        self.damping_coeff_translation = 2.0  # Amortissement en translation (N·s/m)
+        self.damping_coeff_translation = 3.0  # Amortissement en translation (N·s/m)
         self.damping_coeff_rotation = 0.05    # Amortissement en rotation (Nm·s/rad)
         
         # Variables pour le calcul du dt (delta temps) réel
@@ -223,7 +223,7 @@ class Joystick(Node):
         
         # Forces maximales par axe
         self.max_force_by_axis = [3.0, 3.0, 3.0]      # Force maximale en translation (N)
-        self.max_torque_by_axis = [0.15, 0.2, 0.075]  # Couple maximum en rotation (Nm)
+        self.max_torque_by_axis = [0.125, 0.175, 0.05]  # Couple maximum en rotation (Nm)
         self.stiffness_rotation = 4.0                  # Coefficient de raideur en rotation
         
         # ============================================================================
@@ -614,10 +614,12 @@ class Joystick(Node):
 
             if axis < 3:  # Translation
                 damping_force = -self.damping_coeff_translation * self.current_velocity[axis]
-            elif 3 < axis < 6:  # Rotation
+            elif axis == 4:  # Rotation
                 damping_force = -self.damping_coeff_rotation * self.current_velocity[axis] / 5
-            else :
+            elif axis == 5:  # Rotation
                 damping_force = -self.damping_coeff_rotation * self.current_velocity[axis] / 50
+            else :
+                damping_force = -self.damping_coeff_rotation * self.current_velocity[axis] / 75
             
             # FORCE TOTALE: Combinaison de la force de rappel et de l'amortissement
             # La force de rappel provient du calcul précédent dans la fonction parente
