@@ -1,3 +1,19 @@
+#!/usr/bin/env python3
+"""
+Fichier de lancement ROS2 pour la téléopération d'un robot Franka FR3 dans Gazebo Fortress.
+
+Ce fichier configure et lance un environnement de simulation complet pour la téléopération
+d'un robot Franka FR3 avec un contrôleur haptique Desktop 6D de Haption. Il initialise
+Gazebo avec un monde personnalisé, charge les contrôleurs de position et vitesse,
+et démarre tous les nœuds nécessaires pour la téléopération.
+
+Auteur: Vincent Bassemayousse
+Date: 07/10/2025
+Version: 1.0
+Licence: Apache 2.0
+Prérequis: ROS2 Humble, Gazebo Fortress, franka_description, franka_teleop packages
+"""
+
 import os
 import xacro
 
@@ -10,11 +26,33 @@ from launch import LaunchContext, LaunchDescription
 from launch.actions import IncludeLaunchDescription, TimerAction
 from launch_ros.actions import Node
 
+
 def get_robot_description(context: LaunchContext, arm_id, load_gripper, franka_hand):
+    """
+    Génère la description URDF du robot Franka à partir des fichiers XACRO.
+    
+    Cette fonction traite les fichiers XACRO pour créer une description URDF complète
+    du robot Franka, incluant les paramètres pour la simulation Gazebo et ros2_control.
+    
+    Args:
+        context (LaunchContext): Contexte de lancement pour la substitution des variables
+        arm_id (LaunchConfiguration): ID du bras robotique (fr3, fp3, fer)
+        load_gripper (LaunchConfiguration): Active/désactive la pince (true/false)
+        franka_hand (LaunchConfiguration): Type de pince utilisée
+    
+    Returns:
+        list: Liste contenant le nœud robot_state_publisher configuré
+    
+    Raises:
+        FileNotFoundError: Si le fichier XACRO du robot n'est pas trouvé
+        XacroException: Si le traitement XACRO échoue
+    """
+    # Substitution des variables de lancement dans le contexte actuel
     arm_id_str = context.perform_substitution(arm_id)
     load_gripper_str = context.perform_substitution(load_gripper)
     franka_hand_str = context.perform_substitution(franka_hand)
 
+    # Construction du chemin vers le fichier XACRO du robot
     franka_xacro_file = os.path.join(
         get_package_share_directory('franka_description'),
         'robots',
@@ -22,123 +60,173 @@ def get_robot_description(context: LaunchContext, arm_id, load_gripper, franka_h
         arm_id_str + '.urdf.xacro'
     )
 
+    # Traitement du fichier XACRO avec les paramètres spécifiques
     robot_description_config = xacro.process_file(
         franka_xacro_file, 
         mappings={
-            'arm_id': arm_id_str, 
-            'hand': load_gripper_str, 
-            'ros2_control': 'true', 
-            'gazebo': 'true', 
-            'ee_id': franka_hand_str
+            'arm_id': arm_id_str,           # Identifiant du bras
+            'hand': load_gripper_str,       # Chargement de la pince
+            'ros2_control': 'true',         # Activation de ros2_control
+            'gazebo': 'true',               # Configuration pour Gazebo
+            'ee_id': franka_hand_str        # Identifiant de l'effecteur terminal
         }
     )
+    
+    # Conversion en dictionnaire pour robot_state_publisher
     robot_description = {'robot_description': robot_description_config.toxml()}
 
+    # Configuration du nœud robot_state_publisher
     robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
         name='robot_state_publisher',
-        output='both',
-        parameters=[
-            robot_description,
-        ]
+        output='both',  # Affichage sur stdout et stderr
+        parameters=[robot_description]
     )
 
     return [robot_state_publisher]
 
-def generate_launch_description():
-    # Configure ROS nodes for launch
-    load_gripper_name = 'load_gripper'
-    franka_hand_name = 'franka_hand'
-    arm_id_name = 'arm_id'
 
+def generate_launch_description():
+    """
+    Génère la description de lancement complète pour la téléopération Franka.
+    
+    Cette fonction configure l'environnement de simulation complet incluant:
+    - Gazebo avec monde personnalisé
+    - Robot Franka avec contrôleurs position/vitesse
+    - Nœuds de téléopération et de traitement
+    - Systèmes de guidage virtuel et de forces
+    - Monitoring des objets et distances
+    
+    Returns:
+        LaunchDescription: Description complète du lancement ROS2
+    """
+    
+    # ==================== CONFIGURATION DES PARAMÈTRES ====================
+    
+    # Noms des paramètres de configuration du robot
+    load_gripper_name = 'load_gripper'    # Paramètre pour activer la pince
+    franka_hand_name = 'franka_hand'      # Type de pince Franka
+    arm_id_name = 'arm_id'                # Modèle du bras robotique
+
+    # Configuration des variables de lancement
     load_gripper = LaunchConfiguration(load_gripper_name)
     franka_hand = LaunchConfiguration(franka_hand_name)
     arm_id = LaunchConfiguration(arm_id_name)
 
-    # Ajout de paramètres pour le pont ROS-Gazebo
+    # Paramètres pour la simulation et le logging
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     log_level = LaunchConfiguration('log_level', default='info')
 
+    # ==================== ARGUMENTS DE LANCEMENT ====================
+    
+    # Argument pour activer/désactiver la pince
     load_gripper_launch_argument = DeclareLaunchArgument(
-            load_gripper_name,
-            default_value='false',
-            description='true/false for activating the gripper')
+        load_gripper_name,
+        default_value='false',
+        description='Active (true) ou désactive (false) la pince du robot'
+    )
+    
+    # Argument pour le type de pince
     franka_hand_launch_argument = DeclareLaunchArgument(
-            franka_hand_name,
-            default_value='franka_hand',
-            description='Default value: franka_hand')
+        franka_hand_name,
+        default_value='franka_hand',
+        description='Type de pince utilisée (défaut: franka_hand)'
+    )
+    
+    # Argument pour le modèle de bras
     arm_id_launch_argument = DeclareLaunchArgument(
-            arm_id_name,
-            default_value='fr3',
-            description='Available values: fr3, fp3 and fer')
-
-    # Get robot description
-    robot_state_publisher = OpaqueFunction(
-        function=get_robot_description,
-        args=[arm_id, load_gripper, franka_hand])
-
-    # Gazebo Sim
-    os.environ['GZ_SIM_RESOURCE_PATH'] = os.path.dirname(get_package_share_directory('franka_description'))
-    pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
-
-    # Définir le chemin vers votre monde personnalisé
-    custom_world_path = os.path.join(get_package_share_directory('ros_gz_example_gazebo'), 'worlds', 'franka.sdf')
-
-    # Lancer Gazebo avec votre monde personnalisé
-    gazebo_custom_world = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')),
-        launch_arguments={'gz_args': f'{custom_world_path} -r', }.items(),
+        arm_id_name,
+        default_value='fr3',
+        description='Modèle du bras robotique (fr3, fp3, fer)'
     )
 
-    # Spawn dans gazebo avec les positions initiales spécifiées
+    # ==================== CONFIGURATION DU ROBOT ====================
+    
+    # Génération de la description URDF du robot
+    robot_state_publisher = OpaqueFunction(
+        function=get_robot_description,
+        args=[arm_id, load_gripper, franka_hand]
+    )
+
+    # ==================== CONFIGURATION DE GAZEBO ====================
+    
+    # Configuration des chemins de ressources pour Gazebo
+    os.environ['GZ_SIM_RESOURCE_PATH'] = os.path.dirname(
+        get_package_share_directory('franka_description')
+    )
+    pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
+
+    # Chemin vers le monde personnalisé de simulation
+    custom_world_path = os.path.join(
+        get_package_share_directory('ros_gz_example_gazebo'), 
+        'worlds', 
+        'franka.sdf'
+    )
+
+    # Lancement de Gazebo avec le monde personnalisé
+    gazebo_custom_world = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')
+        ),
+        launch_arguments={
+            'gz_args': f'{custom_world_path} -r'  # -r pour démarrage automatique
+        }.items()
+    )
+
+    # ==================== SPAWN DU ROBOT ====================
+    
+    # Spawn du robot dans Gazebo avec position et orientation initiales
     spawn = Node(
         package='ros_gz_sim',
         executable='create',
         arguments=[
-        '-topic', '/robot_description',
-        '-x', '0.0',   # Position X
-        '-y', '-0.5',   # Position Y
-        '-z', '0.5',   # Position Z
-        '-R', '-1.57',   # Roll
-        '-P', '0.0',   # Pitch
-        '-Y', '0.0',   # Yaw
+            '-topic', '/robot_description',  # Topic contenant la description URDF
+            '-x', '0.0',      # Position X (mètres)
+            '-y', '-0.5',     # Position Y (mètres)
+            '-z', '0.5',      # Position Z (mètres)
+            '-R', '-1.57',    # Rotation Roll (radians)
+            '-P', '0.0',      # Rotation Pitch (radians)
+            '-Y', '0.0',      # Rotation Yaw (radians)
         ],
-        output='screen',
+        output='screen'
     )
     
-    # Chargement des contrôleurs dans le bon ordre
+    # ==================== CONTRÔLEURS ROS2_CONTROL ====================
+    
+    # Chargement du broadcster d'état des joints (obligatoire en premier)
     load_joint_state_broadcaster = ExecuteProcess(
         cmd=['ros2', 'control', 'load_controller', '--set-state', 'active',
-                'joint_state_broadcaster'],
+             'joint_state_broadcaster'],
         output='screen'
     )
 
-    # Charger le contrôleur de position en état actif
+    # Contrôleur de position des joints (actif par défaut)
     joint_position_example_controller = ExecuteProcess(
         cmd=['ros2', 'control', 'load_controller', '--set-state', 'active', 
-                'joint_position_example_controller'],
+             'joint_position_example_controller'],
         output='screen'
     )
 
-    # Charger le contrôleur de vitesse en état inactif
+    # Contrôleur de vitesse des joints (inactif par défaut)
     joint_velocity_example_controller = ExecuteProcess(
         cmd=['ros2', 'control', 'load_controller', '--set-state', 'inactive',
-                'joint_velocity_example_controller'],
+             'joint_velocity_example_controller'],
         output='screen'
     )
 
-    # Charger le contrôleur de la pince en état actif
+    # Contrôleur de la pince (actif pour la simulation)
     gripper_example_controller = ExecuteProcess(
         cmd=['ros2', 'control', 'load_controller', '--set-state', 'active', 
-                'gripper_example_controller_simu'],
+             'gripper_example_controller_simu'],
         output='screen'
     )
 
-    # Envoie automatique du message GUICamera pour positionner la caméra
+    # ==================== CONFIGURATION DE LA CAMÉRA ====================
+    
+    # Positionnement automatique de la caméra Gazebo après 5 secondes
     set_camera_pose = TimerAction(
-        period=5.0,
+        period=5.0,  # Délai en secondes
         actions=[
             ExecuteProcess(
                 cmd=[
@@ -157,31 +245,53 @@ def generate_launch_description():
         ]
     )
 
-    # Nœud pour lancer le solveur IK
+    # ==================== NŒUDS DE TÉLÉOPÉRATION ====================
+    
+    # Nœud pour la gestion des offsets de position
+    offset_position = Node(
+        package='test_cartesien',
+        executable='offset_position_simu',
+        name='offset_position',
+        output='screen'
+    )
+
+    # Nœud pour la conversion valeurs vers vitesses
+    value_to_speed = Node(
+        package='test_cartesien',
+        executable='value_to_speed',
+        name='value_to_speed',
+        output='screen'
+    )
+
+    # ==================== SOLVEURS CINÉMATIQUES ====================
+    
+    # Solveur de cinématique inverse (IK - Inverse Kinematics)
     ik_solver_node = Node(
-        package='franka_teleop',      # Nom du package contenant le script
-        executable='franka_ik_solver', # Nom de l'exécutable
-        name='franka_ik_solver',      # Nom du nœud
-        output='screen'               # Afficher la sortie à l'écran
+        package='franka_teleop',
+        executable='franka_ik_solver',
+        name='franka_ik_solver',
+        output='screen'
     )
 
-    # Nœud pour lancer le solveur IG
+    # Solveur de cinématique inverse généralisée (IG - Inverse Generalized)
     ig_solver_node = Node(
-        package='franka_teleop',      # Nom du package contenant le script
-        executable='franka_ig_solver', # Nom de l'exécutable
-        name='franka_ig_solver',      # Nom du nœud
-        output='screen'               # Afficher la sortie à l'écran
+        package='franka_teleop',
+        executable='franka_ig_solver',
+        name='franka_ig_solver',
+        output='screen'
     )
 
-    # Nœud pour lancer le MGD
+    # Modèle géométrique direct (MGD - Forward Kinematics)
     mgd_node = Node(
-        package='franka_teleop',        # Nom du package contenant le script
-        executable='mgd',               # Nom de l'exécutable
-        name='mgd_node',                # Nom du nœud
-        output='screen'                 # Afficher la sortie à l'écran
+        package='franka_teleop',
+        executable='mgd',
+        name='mgd_node',
+        output='screen'
     )
 
-    # Nœud pour lancer le noeud qui permet de changer de mode
+    # ==================== GESTION DES CONTRÔLEURS ====================
+    
+    # Nœud pour changer entre les modes de contrôle (position/vitesse)
     controller_switcher_node = Node(
         package='franka_teleop',
         executable='switch_mode_simu',
@@ -189,121 +299,175 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Nœud pour lancer le force_position
+    # ==================== RETOUR DE FORCE ====================
+    
+    # Nœud pour le retour de force en mode position
     force_position_node = Node(
-        package='franka_teleop',        # Nom du package contenant le script
-        executable='force_position',               # Nom de l'exécutable
-        name='force_position_node',                # Nom du nœud
-        output='screen'                 # Afficher la sortie à l'écran
+        package='franka_teleop',
+        executable='force_position',
+        name='force_position_node',
+        output='screen'
     )
 
-    # Nœud pour lancer le force_vitesse
+    # Nœud pour le retour de force en mode vitesse
     force_vitesse_node = Node(
-        package='franka_teleop',        # Nom du package contenant le script
-        executable='force_vitesse',               # Nom de l'exécutable
-        name='force_vitesse_node',                # Nom du nœud
-        output='screen'                 # Afficher la sortie à l'écran
+        package='franka_teleop',
+        executable='force_vitesse',
+        name='force_vitesse_node',
+        output='screen'
     )
 
-    # Nœud pour connaitre la position de la fiole
+    # ==================== MONITORING ET PERCEPTION ====================
+    
+    # Monitoring de la position de la fiole dans la simulation
     fiole_pose_monitor = Node(
         package="franka_teleop",
         executable="fiole_pose_monitor",
         name="fiole_pose_monitor",
         output="screen",
-        parameters=[{"use_sim_time": use_sim_time, "object_name": "Fiole_world", "poll_rate": 10.0}],
+        parameters=[{
+            "use_sim_time": use_sim_time,
+            "object_name": "Fiole_world",  # Nom de l'objet dans Gazebo
+            "poll_rate": 10.0              # Fréquence de polling (Hz)
+        }]
     )
 
-    # Nœud pour connaitre la distance entre les parroies et l'effecteur du robot
+    # Calcul de distance entre les parois et l'effecteur terminal
     distance_parois_node = Node(
-        package='franka_teleop',        # Nom du package contenant le script
-        executable='distance_parois',               # Nom de l'exécutable
-        name='distance_parois_node',                # Nom du nœud
-        output='screen'                 # Afficher la sortie à l'écran
+        package='franka_teleop',
+        executable='distance_parois',
+        name='distance_parois_node',
+        output='screen'
     )
 
-    # Nœud pour connaitre la distance entre l'objet et l'effecteur du robot
+    # Calcul de distance entre l'objet et l'effecteur terminal
     distance_objet_node = Node(
-        package='franka_teleop',        # Nom du package contenant le script
-        executable='distance_objet',               # Nom de l'exécutable
-        name='distance_objet_node',                # Nom du nœud
-        output='screen'                 # Afficher la sortie à l'écran
+        package='franka_teleop',
+        executable='distance_objet',
+        name='distance_objet_node',
+        output='screen'
     )
 
-    # Nœud pour lancer guide_virtuel
+    # ==================== GUIDAGE VIRTUEL ====================
+    
+    # Système de guidage virtuel pour l'assistance à la téléopération
     guide_virtuel_node = Node(
-        package='franka_teleop',        # Nom du package contenant le script
-        executable='guide_virtuel',               # Nom de l'exécutable
-        name='guide_virtuel_node',                # Nom du nœud
-        output='screen'                 # Afficher la sortie à l'écran
+        package='franka_teleop',
+        executable='guide_virtuel',
+        name='guide_virtuel_node',
+        output='screen'
     )
 
-    # Nœud pour lancer les caméras
+    # ==================== SYSTÈME DE VISION ====================
+    
+    # Lanceur de caméras pour la vision (commenté pour l'instant)
     camera_launcher_node = Node(
-        package='franka_teleop',        
-        executable='camera_launcher',  # Nouveau nom        
-        name='camera_launcher_node',                
+        package='franka_teleop',
+        executable='camera_launcher',
+        name='camera_launcher_node',
         output='screen',
         parameters=[
-            {'world_name': 'demo'},
-            {'model_name': 'Cellule'},
-            {'launch_delay': 2.0}
+            {'world_name': 'demo'},        # Nom du monde Gazebo
+            {'model_name': 'Cellule'},     # Nom du modèle de cellule
+            {'launch_delay': 2.0}          # Délai de lancement (secondes)
         ]
     )
 
+    # ==================== PUBLISHER D'ÉTAT DES JOINTS ====================
+    
+    # Publisher des états de joints pour la visualisation
+    joint_state_publisher = Node(
+        package='joint_state_publisher',
+        executable='joint_state_publisher',
+        name='joint_state_publisher',
+        parameters=[{
+            'source_list': ['joint_states'],  # Sources des états de joints
+            'rate': 30                        # Fréquence de publication (Hz)
+        }]
+    )
+
+    # ==================== CONSTRUCTION DE LA DESCRIPTION DE LANCEMENT ====================
+    
     return LaunchDescription([
+        # Arguments de lancement
         load_gripper_launch_argument,
         franka_hand_launch_argument,
         arm_id_launch_argument,
-        DeclareLaunchArgument('use_sim_time', default_value='true',
-                             description='Use simulation (Gazebo) clock if true'),
-        DeclareLaunchArgument('log_level', default_value='info',
-                             description='Log level for the bridge'),
+        DeclareLaunchArgument(
+            'use_sim_time', 
+            default_value='true',
+            description='Utilise l\'horloge de simulation Gazebo si true'
+        ),
+        DeclareLaunchArgument(
+            'log_level', 
+            default_value='info',
+            description='Niveau de log pour le pont ROS-Gazebo'
+        ),
+        
+        # Lancement de Gazebo et spawn du robot
         gazebo_custom_world,
         robot_state_publisher,
         spawn,
+        
+        # Gestion séquentielle des contrôleurs avec RegisterEventHandler
+        # Le joint_state_broadcaster doit être chargé après le spawn
         RegisterEventHandler(
-                event_handler=OnProcessExit(
-                    target_action=spawn,
-                    on_exit=[load_joint_state_broadcaster],
-                )
+            event_handler=OnProcessExit(
+                target_action=spawn,
+                on_exit=[load_joint_state_broadcaster]
+            )
         ),
+        
+        # Les autres contrôleurs après le joint_state_broadcaster
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=load_joint_state_broadcaster,
-                on_exit=[gripper_example_controller],
+                on_exit=[gripper_example_controller]
             )
         ),
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=load_joint_state_broadcaster,
-                on_exit=[joint_position_example_controller],
+                on_exit=[joint_position_example_controller]
             )
         ),
         RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=load_joint_state_broadcaster,
-                on_exit=[joint_velocity_example_controller],
+                on_exit=[joint_velocity_example_controller]
             )
         ),
-        Node(
-            package='joint_state_publisher',
-            executable='joint_state_publisher',
-            name='joint_state_publisher',
-            parameters=[
-                {'source_list': ['joint_states'],
-                 'rate': 30}],
-        ),
+        
+        # Nœuds de base
+        joint_state_publisher,
+        
+        # Nœuds de téléopération
+        offset_position,
+        value_to_speed,
+        
+        # Solveurs cinématiques
         ik_solver_node,
         ig_solver_node,
         mgd_node,
+        
+        # Gestion des contrôleurs
         controller_switcher_node,
+        
+        # Monitoring et perception
         fiole_pose_monitor,
         distance_objet_node,
+        distance_parois_node,
+        
+        # Retour de force
         force_position_node,
         force_vitesse_node,
-        distance_parois_node,
+        
+        # Guidage virtuel
         guide_virtuel_node,
+        
+        # Configuration de la caméra
         set_camera_pose,
-        camera_launcher_node,
+        
+        # Système de vision
+        # camera_launcher_node,
     ])
